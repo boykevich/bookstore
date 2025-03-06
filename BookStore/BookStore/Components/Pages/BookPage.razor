@@ -15,7 +15,8 @@
             <p><strong>Author(s):</strong> @string.Join(", ", FirstBook.Authors.Select(a => $"{a.FirstName} {a.LastName}"))</p>
             <p><strong>Published:</strong> @FirstBook.DateOfPublishment.ToString("MMMM dd, yyyy")</p>
             <p><strong>Genre:</strong> @FirstBook.Genre</p>
-            <p><strong>Language:</strong> @FirstBook.Language</p>
+            <p><strong>Language(s):</strong> @string.Join(", ", FirstBook.AvailableLanguages)</p>
+            <p><strong>Description:</strong> @FirstBook.SmallDescription</p>
 
             <!-- Кнопка купівлі -->
             <button class="btn btn-primary btn-lg mt-3">BUY</button>
@@ -25,11 +26,13 @@
 
 @code {
     private List<Author> authors;
+    private List<string> languages;
     private Book FirstBook;
 
     protected override void OnInitialized()
     {
         authors = new List<Author> { new Author("J.K.", "Rowling") };
-        FirstBook = new Book("Harry Potter and the Philosopher's Stone", authors, new DateTime(1997, 6, 26), "Fantasy", "English", "/images/books/HarryPotter1.png");
+        languages = new List<string> { "English", "Ukrainian", "French" };
+        FirstBook = new Book("Harry Potter and the Philosopher's Stone", authors, new DateTime(1997, 6, 26), "Fantasy", languages, "/images/books/HarryPotter1.png", "A young boy discovers he is a wizard and embarks on an adventure at Hogwarts.");
     }
 }
