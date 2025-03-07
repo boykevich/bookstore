@@ -1,38 +1,47 @@
-﻿@page "/BookPage"
+﻿@page "/BookPage/{id:int}"
+
+@inject BookStore.Data.HarryPotterBooks HarryPotterBooksData
 
 <h1 class="text-center mt-4">Book Details</h1>
 
-<div class="container mt-4">
-    <div class="row">
-        <!-- Обкладинка книги -->
-        <div class="col-md-4 text-center">
-            <img src="@FirstBook.ImagePath" alt="Book Cover" class="img-fluid rounded shadow-lg" style="max-width: 100%;">
-        </div>
+@if (FirstBook != null)
+{
+    <div class="container mt-4">
+        <div class="row">
+            <!-- Обкладинка книги -->
+            <div class="col-md-4 text-center">
+                <img src="@FirstBook.ImagePath" alt="Book Cover" class="img-fluid rounded shadow-lg" style="max-width: 100%;">
+            </div>
 
-        <!-- Інформація про книгу -->
-        <div class="col-md-8">
-            <h2>@FirstBook.BookName</h2>
-            <p><strong>Author(s):</strong> @string.Join(", ", FirstBook.Authors.Select(a => $"{a.FirstName} {a.LastName}"))</p>
-            <p><strong>Published:</strong> @FirstBook.DateOfPublishment.ToString("MMMM dd, yyyy")</p>
-            <p><strong>Genre:</strong> @FirstBook.Genre</p>
-            <p><strong>Language(s):</strong> @string.Join(", ", FirstBook.AvailableLanguages)</p>
-            <p><strong>Description:</strong> @FirstBook.SmallDescription</p>
+            <!-- Інформація про книгу -->
+            <div class="col-md-8">
+                <h2>@FirstBook.BookName</h2>
+                <p><strong>Author(s):</strong> @string.Join(", ", FirstBook.Authors.Select(a => $"{a.FirstName} {a.LastName}"))</p>
+                <p><strong>Published:</strong> @FirstBook.DateOfPublishment.ToString("MMMM dd, yyyy")</p>
+                <p><strong>Genre:</strong> @FirstBook.Genre</p>
+                <p><strong>Languages:</strong> @string.Join(", ", FirstBook.AvailableLanguages)</p>
+                <p><strong>Price:</strong> $@FirstBook.Price.ToString("0.00")</p>
+                <p><strong>Description:</strong> @FirstBook.SmallDescription</p>
 
-            <!-- Кнопка купівлі -->
-            <button class="btn btn-primary btn-lg mt-3">BUY</button>
+                <!-- Кнопки -->
+                <div class="mt-3">
+                    <button class="btn btn-success btn-lg">Buy for $@FirstBook.Price.ToString("0.00")</button>
+                </div>
+            </div>
         </div>
     </div>
-</div>
+}
+else
+{
+    <h3 class="text-center text-danger">Book not found.</h3>
+}
 
 @code {
-    private List<Author> authors;
-    private List<string> languages;
+    [Parameter] public int Id { get; set; }
     private Book FirstBook;
 
     protected override void OnInitialized()
     {
-        authors = new List<Author> { new Author("J.K.", "Rowling") };
-        languages = new List<string> { "English", "Ukrainian", "French" };
-        FirstBook = new Book("Harry Potter and the Philosopher's Stone", authors, new DateTime(1997, 6, 26), "Fantasy", languages, "/images/books/HarryPotter1.png", "A young boy discovers he is a wizard and embarks on an adventure at Hogwarts.");
+        FirstBook = HarryPotterBooksData.Books.FirstOrDefault(b => b.Id == Id);
     }
 }
