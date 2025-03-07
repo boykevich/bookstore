@@ -1,0 +1,32 @@
+﻿@page "/BookList"
+
+@inject BookStore.Data.HarryPotterBooks HarryPotterBooksData
+
+<h1 class="text-center mt-4">Book List</h1>
+
+<div class="container mt-4">
+    <div class="row">
+        @foreach (var book in HarryPotterBooksData.Books)
+        {
+            <div class="col-md-4 mb-4">
+                <div class="card shadow-lg h-100">
+                    <div class="d-flex justify-content-center align-items-center" style="height: 350px; overflow: hidden;">
+                        <img src="@book.ImagePath" alt="Book Cover" class="card-img-top" style="max-height: 100%; width: auto;">
+                    </div>
+                    <div class="card-body d-flex flex-column">
+                        <h5 class="card-title">@book.BookName</h5>
+                        <p class="card-text"><strong>Author(s):</strong> @string.Join(", ", book.Authors.Select(a => $"{a.FirstName} {a.LastName}"))</p>
+                        <p class="card-text"><strong>Genre:</strong> @book.Genre</p>
+                        <p class="card-text"><strong>Languages:</strong> @string.Join(", ", book.AvailableLanguages)</p>
+                        <p class="card-text"><strong>Price:</strong> $@book.Price.ToString("0.00")</p>
+                        <p class="card-text">@book.SmallDescription.Substring(0, Math.Min(100, book.SmallDescription.Length))...</p>
+                        <div class="mt-auto d-flex justify-content-between">
+                            <a href="/BookPage/@book.Id" class="btn btn-primary">View Details</a>
+                            <button class="btn btn-success">Buy for $@book.Price.ToString("0.00")</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+</div>
