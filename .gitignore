@@ -401,4 +401,5 @@ FodyWeavers.xsd
 .idea
 
 postgres_data
+appsettings.json
 

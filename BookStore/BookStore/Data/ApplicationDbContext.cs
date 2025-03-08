@@ -55,6 +55,12 @@ namespace BookStore.Data
                     DateOfPublishment = DateTime.SpecifyKind(new DateTime(1999, 7, 8), DateTimeKind.Utc) // ✅ Convert to UTC
                 }
             );
+            
+            modelBuilder.Entity("AuthorBook").HasData(
+                new { AuthorsId = 1, BooksId = 1 },
+                new { AuthorsId = 1, BooksId = 2 },
+                new { AuthorsId = 1, BooksId = 3 }
+            );
         }
     }
 }
