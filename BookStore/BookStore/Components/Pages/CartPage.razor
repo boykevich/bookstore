@@ -1,0 +1,106 @@
+﻿@page "/cartpage"
+@attribute [Authorize]
+@rendermode InteractiveServer
+@inject ApplicationDbContext DbContext
+@inject AuthenticationStateProvider AuthStateProvider
+@inject NavigationManager NavigationManager
+
+<h1 class="mt-4">Your Shopping Cart</h1>
+
+@if (cart == null)
+{
+    <p>Loading your cart...</p>
+}
+else if (!cart.Items.Any())
+{
+    <p>Your cart is empty.</p>
+}
+else
+{
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Book</th>
+                <th>Quantity</th>
+                <th>Price</th>
+                <th>Total</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var item in cart.Items)
+            {
+                <tr>
+                    <td>@item.Book.BookName</td>
+                    <td>@item.Quantity</td>
+                    <td>@item.Book.Price.ToString("C")</td>
+                    <td>@(item.Quantity * item.Book.Price).ToString("C")</td>
+                    <td>
+                        <button class="btn btn-danger btn-sm" @onclick="() => RemoveItem(item)">Remove</button>
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+    <h4>Total: @cart.Items.Sum(i => i.Quantity * i.Book.Price).ToString("C")</h4>
+    <button class="btn btn-primary" @onclick="Checkout">Checkout</button>
+    <button class="btn btn-warning ms-2" @onclick="ClearCart">Clear Cart</button>
+}
+
+@code {
+    private Cart? cart;
+    private string? userId;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+        userId = user.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (string.IsNullOrEmpty(userId))
+        {
+            // У разі ненормальної ситуації – перенаправляємо користувача на логін
+            NavigationManager.NavigateTo("/Account/Login");
+            return;
+        }
+
+        // Завантажуємо кошик користувача разом з інформацією про книги
+        cart = await DbContext.Carts
+            .Include(c => c.Items)
+                .ThenInclude(ci => ci.Book)
+            .FirstOrDefaultAsync(c => c.UserId == userId);
+
+        // Якщо кошик не знайдено, створюємо новий
+        if (cart == null)
+        {
+            cart = new Cart { UserId = userId };
+            DbContext.Carts.Add(cart);
+            await DbContext.SaveChangesAsync();
+        }
+    }
+
+    private async Task RemoveItem(CartItem item)
+    {
+        if (cart != null)
+        {
+            cart.Items.Remove(item);
+            DbContext.CartItems.Remove(item);
+            await DbContext.SaveChangesAsync();
+        }
+    }
+
+    private async Task ClearCart()
+    {
+        if (cart != null && cart.Items.Any())
+        {
+            DbContext.CartItems.RemoveRange(cart.Items);
+            cart.Items.Clear();
+            await DbContext.SaveChangesAsync();
+        }
+    }
+
+    private void Checkout()
+    {
+        // Реалізуйте логіку оформлення замовлення або перенаправте на відповідну сторінку
+        NavigationManager.NavigateTo("/Checkout");
+    }
+}
