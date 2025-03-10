@@ -1,46 +1,69 @@
 ﻿@page "/Account/ConfirmEmail"
-
 @using System.Text
-@using Microsoft.AspNetCore.Identity
 @using Microsoft.AspNetCore.WebUtilities
+@using Microsoft.AspNetCore.Identity
 @using BookStore.Data
 
 @inject UserManager<ApplicationUser> UserManager
-@inject IdentityRedirectManager RedirectManager
+@inject SignInManager<ApplicationUser> SignInManager
+@inject NavigationManager NavigationManager
+@inject ILogger<ConfirmEmail> Logger
 
-<PageTitle>Confirm email</PageTitle>
+<PageTitle>Confirm Email</PageTitle>
 
-<h1>Confirm email</h1>
-<StatusMessage Message="@statusMessage"/>
+@if (confirmationMessage != null)
+{
+    <div class="alert alert-success">@confirmationMessage</div>
+}
+else
+{
+    <p>Processing...</p>
+}
 
 @code {
-    private string? statusMessage;
+    [Parameter]
+    [SupplyParameterFromQuery]
+    public string? userId { get; set; }
 
-    [CascadingParameter] private HttpContext HttpContext { get; set; } = default!;
+    [Parameter]
+    [SupplyParameterFromQuery]
+    public string? code { get; set; }
 
-    [SupplyParameterFromQuery] private string? UserId { get; set; }
+    [Parameter]
+    [SupplyParameterFromQuery]
+    public string? returnUrl { get; set; }
 
-    [SupplyParameterFromQuery] private string? Code { get; set; }
+    private string? confirmationMessage;
 
     protected override async Task OnInitializedAsync()
     {
-        if (UserId is null || Code is null)
+        if (string.IsNullOrEmpty(userId) || string.IsNullOrEmpty(code))
         {
-            RedirectManager.RedirectTo("");
+            confirmationMessage = "Некоректне посилання підтвердження.";
+            return;
         }
 
-        var user = await UserManager.FindByIdAsync(UserId);
-        if (user is null)
+        // Декодування токена
+        var decodedCode = Encoding.UTF8.GetString(WebEncoders.Base64UrlDecode(code));
+        var user = await UserManager.FindByIdAsync(userId);
+        if (user == null)
         {
-            HttpContext.Response.StatusCode = StatusCodes.Status404NotFound;
-            statusMessage = $"Error loading user with ID {UserId}";
+            confirmationMessage = "Користувача не знайдено.";
+            return;
+        }
+
+        var result = await UserManager.ConfirmEmailAsync(user, decodedCode);
+        if (result.Succeeded)
+        {
+            confirmationMessage = "Email успішно підтверджено. Тепер ви можете увійти в систему.";
+
+            // За бажанням, можна автоматично виконати вхід:
+            // await SignInManager.SignInAsync(user, isPersistent: false);
+            // NavigationManager.NavigateTo(returnUrl ?? "/");
         }
         else
         {
-            var code = Encoding.UTF8.GetString(WebEncoders.Base64UrlDecode(Code));
-            var result = await UserManager.ConfirmEmailAsync(user, code);
-            statusMessage = result.Succeeded ? "Thank you for confirming your email." : "Error confirming your email.";
+            confirmationMessage = "Помилка підтвердження email.";
         }
     }
-
 }
