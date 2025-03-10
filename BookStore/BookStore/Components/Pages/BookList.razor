@@ -1,8 +1,12 @@
 ﻿@page "/BookList"
-@using BookStore.Data
+@using System.Security.Claims
+@using Microsoft.AspNetCore.Components
 @using Microsoft.EntityFrameworkCore
+@rendermode InteractiveServer
 
 @inject ApplicationDbContext DbContext
+@inject AuthenticationStateProvider AuthStateProvider
+@inject NavigationManager NavigationManager
 
 <h1 class="text-center mt-4">Book List</h1>
 
@@ -23,16 +27,21 @@ else
                         </div>
                         <div class="card-body d-flex flex-column">
                             <h5 class="card-title">@book.BookName</h5>
-                            <p class="card-text"><strong>Author(s):</strong> @string.Join(", ", book.Authors.Select(a => $"{a.FirstName} {a.LastName}"))</p>
+                            <p class="card-text">
+                                <strong>Author(s):</strong>
+                                @string.Join(", ", book.Authors.Select(a => $"{a.FirstName} {a.LastName}"))
+                            </p>
                             <p class="card-text"><strong>Genre:</strong> @book.Genre</p>
                             <p class="card-text"><strong>Language:</strong> @book.AvailableLanguage</p>
                             <p class="card-text"><strong>Price:</strong> $@book.Price.ToString("0.00")</p>
                             <p class="card-text">
-                                @(string.IsNullOrEmpty(book.SmallDescription) ? "" : book.SmallDescription.Substring(0, Math.Min(100, book.SmallDescription.Length)) + "...")
+                                @(string.IsNullOrEmpty(book.SmallDescription)
+                                        ? ""
+                                        : book.SmallDescription.Substring(0, Math.Min(100, book.SmallDescription.Length)) + "...")
                             </p>
                             <div class="mt-auto d-flex justify-content-between">
                                 <a href="/BookPage/@book.Id" class="btn btn-primary">View Details</a>
-                                <button class="btn btn-success">Buy for $@book.Price.ToString("0.00")</button>
+                                <button class="btn btn-success" @onclick="() => AddToCart(book)">Add to Cart</button>
                             </div>
                         </div>
                     </div>
@@ -47,8 +56,64 @@ else
 
     protected override async Task OnInitializedAsync()
     {
+        Console.WriteLine("Added to Cart");
         books = await DbContext.Books
-            .Include(b => b.Authors) // Include authors to avoid null references
+            .Include(b => b.Authors)
             .ToListAsync();
     }
+
+    private async Task AddToCart(Book book)
+    {
+        Console.WriteLine("AddToCart викликано для книги: " + book.BookName);
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+        if (user.Identity is null || !user.Identity.IsAuthenticated)
+        {
+            // Передаємо поточний URL як returnUrl, щоб після реєстрації користувач повернувся сюди
+            var returnUrl = Uri.EscapeDataString(NavigationManager.Uri);
+            NavigationManager.NavigateTo($"/Account/Register?returnUrl={returnUrl}");
+            return;
+        }
+
+        // Отримання ID користувача з claims
+        var userId = user.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (string.IsNullOrEmpty(userId))
+        {
+            var returnUrl = Uri.EscapeDataString(NavigationManager.Uri);
+            NavigationManager.NavigateTo($"/Account/Register?returnUrl={returnUrl}");
+            return;
+        }
+
+        // Шукаємо корзину користувача у базі даних
+        var cart = await DbContext.Carts
+            .Include(c => c.Items)
+            .FirstOrDefaultAsync(c => c.UserId == userId);
+
+        if (cart == null)
+        {
+            // Якщо корзини ще немає, створюємо її
+            cart = new Cart { UserId = userId };
+            DbContext.Carts.Add(cart);
+            await DbContext.SaveChangesAsync(); // Зберігаємо, щоб отримати ідентифікатор корзини, якщо необхідно
+        }
+
+        // Перевіряємо, чи книга вже є у корзині
+        var cartItem = cart.Items.FirstOrDefault(ci => ci.BookId == book.Id);
+        if (cartItem == null)
+        {
+            cartItem = new CartItem
+                {
+                    BookId = book.Id,
+                    Quantity = 1
+                };
+            cart.Items.Add(cartItem);
+        }
+        else
+        {
+            cartItem.Quantity++;
+        }
+
+        await DbContext.SaveChangesAsync();
+    }
+
 }
