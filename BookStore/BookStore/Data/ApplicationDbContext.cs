@@ -16,7 +16,9 @@ namespace BookStore.Data
         {
             // Seed Authors
             modelBuilder.Entity<Author>().HasData(
-                new Author { Id = 1, FirstName = "J.K.", LastName = "Rowling" }
+                new Author { Id = 1, FirstName = "J.K.", LastName = "Rowling" },
+                new Author { Id = 2, FirstName = "James", LastName = "Clear"},
+                new Author { Id = 3, FirstName = "Taras", LastName = "Shevchenko"}
             );
 
             // Seed Books
@@ -53,13 +55,38 @@ namespace BookStore.Data
                     SmallDescription = "Harry faces new challenges as he learns about Sirius Black, a dangerous prisoner who has escaped from Azkaban.",
                     Price = 23.99m,
                     DateOfPublishment = DateTime.SpecifyKind(new DateTime(1999, 7, 8), DateTimeKind.Utc) // ✅ Convert to UTC
+                },
+                new Book
+                {
+                    Id = 4,
+                    BookName = "Atomic Habits",
+                    Genre = "Self-Improvement",
+                    AvailableLanguage = "English",
+                    ImagePath = "/images/books/AtomicHabits.png",
+                    SmallDescription = "A practical guide on how tiny changes can lead to remarkable results in life and productivity.",
+                    Price = 25.99m,
+                    DateOfPublishment = DateTime.SpecifyKind(new DateTime(2018, 10, 16), DateTimeKind.Utc)
+                },
+                new Book
+                {
+                    Id = 5,
+                    BookName = "Harry Potter and the Goblet of Firen",
+                    Genre = "Fantasy",
+                    AvailableLanguage = "English",
+                    ImagePath = "/images/books/HarryPotter4.png",
+                    SmallDescription = "Harry unexpectedly becomes a competitor in the dangerous Triwizard Tournament, a magical competition between three wizarding schools. As he faces deadly challenges, he also uncovers a sinister plot involving Lord Voldemort’s return to power. The story marks a turning point in the series, shifting from a more lighthearted adventure to a darker, more intense narrative.",
+                    Price = 25.99m,
+                    DateOfPublishment = DateTime.SpecifyKind(new DateTime(2000, 7, 8), DateTimeKind.Utc) // ✅ Convert to UTC
                 }
             );
             
             modelBuilder.Entity("AuthorBook").HasData(
                 new { AuthorsId = 1, BooksId = 1 },
                 new { AuthorsId = 1, BooksId = 2 },
-                new { AuthorsId = 1, BooksId = 3 }
+                new { AuthorsId = 1, BooksId = 3 },
+                new { AuthorsId = 2, BooksId = 4 },
+                new { AuthorsId = 1, BooksId = 5 },
+                new { AuthorsId = 3, BooksId = 5 }
             );
         }
     }

@@ -1,35 +1,35 @@
-﻿@page "/harry-potter"
+﻿@page "/BookPage/{id:int}"
 @using Microsoft.EntityFrameworkCore
 @inject Data.ApplicationDbContext DbContext
 
-<h3>Harry Potter Books</h3>
+<h3>Book Details</h3>
 
-@if (books == null)
+@if (book == null)
 {
     <p>Loading...</p>
 }
 else
 {
-    <ul>
-        @foreach (var book in books)
-        {
-            <li>
-                <strong>@book.BookName</strong> - @book.Genre <br />
-                <img src="@book.ImagePath" width="100" />
-                <p>@book.SmallDescription</p>
-                <p>Price: $@book.Price</p>
-            </li>
-        }
-    </ul>
+    <div>
+        <h2>@book.BookName</h2>
+        <p><strong>Genre:</strong> @book.Genre</p>
+        <img src="@book.ImagePath" width="200" />
+        <p>@book.SmallDescription</p>
+        <p><strong>Price:</strong> $@book.Price</p>
+        <p><strong>Published:</strong> @book.DateOfPublishment.ToString("MMMM dd, yyyy")</p>
+        <p><strong>Languages:</strong> @string.Join(", ", book.AvailableLanguage)</p>
+        <p><strong>Authors:</strong> @string.Join(", ", book.Authors.Select(a => $"{a.FirstName} {a.LastName}"))</p>
+    </div>
 }
 
 @code {
-    private List<Book>? books;
+    [Parameter] public int id { get; set; }
+    private Book? book;
 
     protected override async Task OnInitializedAsync()
     {
-        books = await DbContext.Books
-            .Where(b => b.Genre == "Fantasy")
-            .ToListAsync();
+        book = await DbContext.Books
+            .Include(b => b.Authors)
+            .FirstOrDefaultAsync(b => b.Id == id);
     }
 }
