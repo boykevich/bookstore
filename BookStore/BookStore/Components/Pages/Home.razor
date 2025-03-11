@@ -1,5 +1,9 @@
 ﻿@page "/"
 @using Microsoft.AspNetCore.Components
+@using Microsoft.EntityFrameworkCore
+@using System.Security.Claims
+@inject ApplicationDbContext DbContext
+@inject AuthenticationStateProvider AuthStateProvider
 
 <PageTitle>Home</PageTitle>
 
@@ -13,25 +17,39 @@
         <button @onclick="PerformSearch" class="search-button">🔍 Search</button>
     </div>
     <div class="cart">
-        <a href="/cart">
-            <span class="cart-icon">🛒</span> <span class="cart-count">0</span>
+        <a href="/cartpage">
+            <span class="cart-icon">🛒</span> <span class="cart-count">@(cart?.Items.Count() ?? 0)</span>
         </a>
     </div>
 </div>
 
 <!-- Main Content -->
 <div class="main-content">
-    @* <h1>Hello, world!</h1> *@
     <p>Welcome to your new app.</p>
 </div>
 
 @code {
     private string SearchQuery { get; set; } = "";
+    private Cart? cart;
 
     private void PerformSearch()
     {
         Console.WriteLine($"Searching for: {SearchQuery}");
-        // Here you can implement navigation to a search results page
         // NavigationManager.NavigateTo($"/search?query={SearchQuery}");
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+
+        if (user.Identity?.IsAuthenticated == true)
+        {
+            var userId = user.FindFirstValue(ClaimTypes.NameIdentifier);
+
+            cart = await DbContext.Carts
+                .Include(c => c.Items)
+                .FirstOrDefaultAsync(c => c.UserId == userId);
+        }
     }
 }
