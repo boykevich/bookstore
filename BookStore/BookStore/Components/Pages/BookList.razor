@@ -11,9 +11,22 @@
 
 <h1 class="text-center mt-4">Book List</h1>
 
+<div class="search-bar text-center mb-4">
+    <InputText @bind-Value="SearchQuery" placeholder="Enter desired book..." class="search-input" />
+    <button @onclick="PerformSearch" class="search-button btn btn-primary">🔍 Search</button>
+    @if (!string.IsNullOrEmpty(searchError))
+    {
+        <span class="text-danger ml-2">@searchError</span>
+    }
+</div>
+
 @if (books == null)
 {
     <p>Loading...</p>
+}
+else if (!books.Any())
+{
+    <p class="text-center">No books found.</p>
 }
 else
 {
@@ -54,19 +67,62 @@ else
             </div>
         </div>
     }
-
 }
 
 @code {
     private List<Book>? books;
+    private string SearchQuery = "";
     private string errorMessage = "";
+    private string searchError = "";
 
     protected override async Task OnInitializedAsync()
     {
-        Console.WriteLine("Added to Cart");
-        books = await DbContext.Books
-            .Include(b => b.Authors)
-            .ToListAsync();
+        await LoadBooks();
+    }
+
+    private async Task LoadBooks()
+    {
+        try
+        {
+            books = await DbContext.Books.Include(b => b.Authors).ToListAsync();
+        }
+        catch (Exception ex)
+        {
+            errorMessage = "Failed to load books. Please try again later.";
+            Console.WriteLine($"Error loading books: {ex.Message}");
+        }
+    }
+
+    private async Task PerformSearch()
+    {
+        // Якщо рядок пошуку порожній, завантажуємо всі книги (дефолтне відображення)
+        if (string.IsNullOrWhiteSpace(SearchQuery))
+        {
+            searchError = "";
+            await LoadBooks();
+        }
+        // Якщо введено символи, але їх менше 3, виводимо повідомлення
+        else if (SearchQuery.Trim().Length < 3)
+        {
+            searchError = "Введіть хоча б 3 символи";
+            return;
+        }
+        else
+        {
+            searchError = "";
+            try
+            {
+                books = await DbContext.Books
+                    .Include(b => b.Authors)
+                    .Where(b => b.BookName.ToLower().Contains(SearchQuery.ToLower()))
+                    .ToListAsync();
+            }
+            catch (Exception ex)
+            {
+                errorMessage = "Failed to perform search. Please try again later.";
+                Console.WriteLine($"Error searching books: {ex.Message}");
+            }
+        }
     }
 
     private async Task AddToCart(Book book)
@@ -76,13 +132,11 @@ else
         var user = authState.User;
         if (user.Identity is null || !user.Identity.IsAuthenticated)
         {
-            // Передаємо поточний URL як returnUrl, щоб після реєстрації користувач повернувся сюди
             var returnUrl = Uri.EscapeDataString(NavigationManager.Uri);
             NavigationManager.NavigateTo($"/Account/Login?returnUrl={returnUrl}");
             return;
         }
 
-        // Отримання ID користувача з claims
         var userId = user.FindFirstValue(ClaimTypes.NameIdentifier);
         if (string.IsNullOrEmpty(userId))
         {
@@ -91,27 +145,21 @@ else
             return;
         }
 
-        // Шукаємо корзину користувача у базі даних
         var cart = await DbContext.Carts
             .Include(c => c.Items)
             .FirstOrDefaultAsync(c => c.UserId == userId);
 
         if (cart == null)
         {
-            // Якщо корзини ще немає, створюємо її
             cart = new Cart { UserId = userId };
             DbContext.Carts.Add(cart);
-            await DbContext.SaveChangesAsync(); // Зберігаємо, щоб отримати ідентифікатор корзини, якщо необхідно
+            await DbContext.SaveChangesAsync();
         }
 
-        // Перевіряємо, чи книга вже є у корзині
         var cartItem = cart.Items.FirstOrDefault(ci => ci.BookId == book.Id);
         if (cartItem == null)
         {
-            cartItem = new CartItem
-                {
-                    BookId = book.Id,
-                };
+            cartItem = new CartItem { BookId = book.Id };
             cart.Items.Add(cartItem);
             errorMessage = string.Empty;
         }
@@ -122,5 +170,4 @@ else
 
         await DbContext.SaveChangesAsync();
     }
-
 }
