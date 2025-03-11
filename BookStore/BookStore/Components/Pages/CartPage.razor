@@ -21,9 +21,7 @@ else
         <thead>
             <tr>
                 <th>Book</th>
-                <th>Quantity</th>
                 <th>Price</th>
-                <th>Total</th>
                 <th>Actions</th>
             </tr>
         </thead>
@@ -32,9 +30,7 @@ else
             {
                 <tr>
                     <td>@item.Book.BookName</td>
-                    <td>@item.Quantity</td>
                     <td>@item.Book.Price.ToString("C")</td>
-                    <td>@(item.Quantity * item.Book.Price).ToString("C")</td>
                     <td>
                         <button class="btn btn-danger btn-sm" @onclick="() => RemoveItem(item)">Remove</button>
                     </td>
@@ -42,7 +38,7 @@ else
             }
         </tbody>
     </table>
-    <h4>Total: @cart.Items.Sum(i => i.Quantity * i.Book.Price).ToString("C")</h4>
+    <h4>Total: @cart.Items.Sum(i => i.Book.Price).ToString("C")</h4>
     <button class="btn btn-primary" @onclick="Checkout">Checkout</button>
     <button class="btn btn-warning ms-2" @onclick="ClearCart">Clear Cart</button>
 }
