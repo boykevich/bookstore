@@ -1,0 +1,35 @@
+﻿.error-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.75); /* Темний фон з прозорістю */
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 9999; /* Впевнюємось, що оверлей поверх усього */
+}
+
+.error-message {
+    background: white;
+    padding: 2rem;
+    border-radius: 10px;
+    font-size: 1.5rem;
+    font-weight: bold;
+    text-align: center;
+    box-shadow: 0 0 15px rgba(0,0,0,0.5);
+    max-width: 500px;
+    width: 100%;
+    position: relative;
+}
+
+.close-btn {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    font-size: 1.5rem;
+    background: none;
+    border: none;
+    cursor: pointer;
+}
