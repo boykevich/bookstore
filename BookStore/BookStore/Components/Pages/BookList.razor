@@ -34,11 +34,6 @@ else
                             <p class="card-text"><strong>Genre:</strong> @book.Genre</p>
                             <p class="card-text"><strong>Language:</strong> @book.AvailableLanguage</p>
                             <p class="card-text"><strong>Price:</strong> $@book.Price.ToString("0.00")</p>
-                            <p class="card-text">
-                                @(string.IsNullOrEmpty(book.SmallDescription)
-                                        ? ""
-                                        : book.SmallDescription.Substring(0, Math.Min(100, book.SmallDescription.Length)) + "...")
-                            </p>
                             <div class="mt-auto d-flex justify-content-between">
                                 <a href="/BookPage/@book.Id" class="btn btn-primary">View Details</a>
                                 <button class="btn btn-success" @onclick="() => AddToCart(book)">Add to Cart</button>

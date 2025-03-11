@@ -49,3 +49,76 @@ h1:focus {
 .darker-border-checkbox.form-check-input {
     border-color: #929292;
 }
+
+
+/* Top Navigation Bar */
+.top-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 15px 20px;
+    background: #e63946; /* Red like in Megaknihy */
+    color: white;
+    font-weight: bold;
+}
+
+/* Logo */
+.logo h2 {
+    margin: 0;
+    font-size: 24px;
+}
+
+/* Search Bar */
+.search-bar {
+    display: flex;
+    align-items: center;
+    background: white;
+    padding: 5px;
+    border-radius: 30px;
+    width: 40%;
+    box-shadow: 0px 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.search-input {
+    border: none;
+    padding: 8px;
+    width: 100%;
+    outline: none;
+    font-size: 16px;
+    border-radius: 30px 0 0 30px;
+}
+
+.search-button {
+    border: none;
+    background: #e63946;
+    color: white;
+    cursor: pointer;
+    padding: 8px 15px;
+    font-size: 16px;
+    border-radius: 0 30px 30px 0;
+}
+
+/* Cart Icon */
+.cart a {
+    color: white;
+    text-decoration: none;
+    font-size: 18px;
+    font-weight: bold;
+    display: flex;
+    align-items: center;
+}
+
+.cart-icon {
+    font-size: 24px;
+    margin-right: 5px;
+}
+
+.cart-count {
+    background: white;
+    color: #e63946;
+    padding: 2px 5px;
+    border-radius: 10px;
+    font-size: 14px;
+}
+
+
