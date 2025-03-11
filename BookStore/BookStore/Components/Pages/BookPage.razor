@@ -1,6 +1,13 @@
-@page "/BookPage/{id:int}"
+﻿@page "/BookPage/{id:int}"
 @using Microsoft.EntityFrameworkCore
+@using System.Security.Claims
 @inject Data.ApplicationDbContext DbContext
+@inject AuthenticationStateProvider AuthStateProvider
+@inject NavigationManager NavigationManager
+@rendermode InteractiveServer
+
+<link rel="stylesheet" href="error.css" />
+
 
 <h3>Book Details</h3>
 
@@ -19,17 +26,74 @@ else
         <p><strong>Published:</strong> @book.DateOfPublishment.ToString("MMMM dd, yyyy")</p>
         <p><strong>Languages:</strong> @book.AvailableLanguage</p>
         <p><strong>Authors:</strong> @string.Join(", ", book.Authors.Select(a => $"{a.FirstName} {a.LastName}"))</p>
+        <button class="btn btn-success" @onclick="() => AddToCart(book)">Add to Cart</button>
+        @if (!string.IsNullOrEmpty(errorMessage))
+        {
+            <div class="error-overlay">
+                <div class="error-message">
+                    <button class="close-btn" @onclick="() => errorMessage = string.Empty">&times;</button>
+                    @errorMessage
+                </div>
+            </div>
+        }
     </div>
 }
 
 @code {
     [Parameter] public int id { get; set; }
     private Book? book;
+    private string errorMessage = "";
 
     protected override async Task OnInitializedAsync()
     {
         book = await DbContext.Books
             .Include(b => b.Authors)
             .FirstOrDefaultAsync(b => b.Id == id);
+    }
+
+    private async Task AddToCart(Book book)
+    {
+        Console.WriteLine("AddToCart викликано для книги: " + book.BookName);
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+        if (user.Identity is null || !user.Identity.IsAuthenticated)
+        {
+            var returnUrl = Uri.EscapeDataString(NavigationManager.Uri);
+            NavigationManager.NavigateTo($"/Account/Login?returnUrl={returnUrl}");
+            return;
+        }
+
+        var userId = user.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (string.IsNullOrEmpty(userId))
+        {
+            var returnUrl = Uri.EscapeDataString(NavigationManager.Uri);
+            NavigationManager.NavigateTo($"/Account/Login?returnUrl={returnUrl}");
+            return;
+        }
+
+        var cart = await DbContext.Carts
+            .Include(c => c.Items)
+            .FirstOrDefaultAsync(c => c.UserId == userId);
+
+        if (cart == null)
+        {
+            cart = new Cart { UserId = userId };
+            DbContext.Carts.Add(cart);
+            await DbContext.SaveChangesAsync();
+        }
+
+        var cartItem = cart.Items.FirstOrDefault(ci => ci.BookId == book.Id);
+        if (cartItem == null)
+        {
+            cartItem = new CartItem { BookId = book.Id };
+            cart.Items.Add(cartItem);
+            errorMessage = string.Empty;
+        }
+        else
+        {
+            errorMessage = "Ти шо єблан! Нахуя тобі 2 копії тієї самої книжки, єбанат!";
+        }
+
+        await DbContext.SaveChangesAsync();
     }
 }
