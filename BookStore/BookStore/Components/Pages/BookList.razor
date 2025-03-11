@@ -7,6 +7,7 @@
 @inject ApplicationDbContext DbContext
 @inject AuthenticationStateProvider AuthStateProvider
 @inject NavigationManager NavigationManager
+<link rel="stylesheet" href="error.css" />
 
 <h1 class="text-center mt-4">Book List</h1>
 
@@ -44,10 +45,21 @@ else
             }
         </div>
     </div>
+    @if (!string.IsNullOrEmpty(errorMessage))
+    {
+        <div class="error-overlay">
+            <div class="error-message">
+                <button class="close-btn" @onclick="() => errorMessage = string.Empty">&times;</button>
+                @errorMessage
+            </div>
+        </div>
+    }
+
 }
 
 @code {
     private List<Book>? books;
+    private string errorMessage = "";
 
     protected override async Task OnInitializedAsync()
     {
@@ -99,13 +111,13 @@ else
             cartItem = new CartItem
                 {
                     BookId = book.Id,
-                    Quantity = 1
                 };
             cart.Items.Add(cartItem);
+            errorMessage = string.Empty;
         }
         else
         {
-            cartItem.Quantity++;
+            errorMessage = "Ти шо єблан! Нахуя тобі 2 копії тієї самої книжки, єбанат!";
         }
 
         await DbContext.SaveChangesAsync();
