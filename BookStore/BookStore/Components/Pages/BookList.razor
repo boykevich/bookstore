@@ -32,7 +32,7 @@ else
 {
     <div class="container mt-4">
         <div class="row">
-            @foreach (var book in books)
+            @foreach (var book in books.Skip((CurrentPage - 1) * PageSize).Take(PageSize))
             {
                 <div class="col-md-4 mb-4">
                     <div class="card shadow-lg h-100">
@@ -58,6 +58,13 @@ else
             }
         </div>
     </div>
+
+    <div class="pagination text-center mt-4">
+        <button class="btn btn-secondary" @onclick="PreviousPage" disabled="@(CurrentPage == 1)">Previous</button>
+        <span class="mx-2">Page @CurrentPage of @TotalPages</span>
+        <button class="btn btn-secondary" @onclick="NextPage" disabled="@(CurrentPage == TotalPages)">Next</button>
+    </div>
+
     @if (!string.IsNullOrEmpty(errorMessage))
     {
         <div class="error-overlay">
@@ -74,6 +81,9 @@ else
     private string SearchQuery = "";
     private string errorMessage = "";
     private string searchError = "";
+    private int CurrentPage = 1;
+    private const int PageSize = 9;
+    private int TotalPages = 1;
 
     protected override async Task OnInitializedAsync()
     {
@@ -85,6 +95,7 @@ else
         try
         {
             books = await DbContext.Books.Include(b => b.Authors).ToListAsync();
+            TotalPages = (int)Math.Ceiling((double)(books?.Count ?? 0) / PageSize);
         }
         catch (Exception ex)
         {
@@ -95,13 +106,11 @@ else
 
     private async Task PerformSearch()
     {
-        // Якщо рядок пошуку порожній, завантажуємо всі книги (дефолтне відображення)
         if (string.IsNullOrWhiteSpace(SearchQuery))
         {
             searchError = "";
             await LoadBooks();
         }
-        // Якщо введено символи, але їх менше 3, виводимо повідомлення
         else if (SearchQuery.Trim().Length < 3)
         {
             searchError = "Введіть хоча б 3 символи";
@@ -112,16 +121,33 @@ else
             searchError = "";
             try
             {
-                books = await DbContext.Books
-                    .Include(b => b.Authors)
+                books = await DbContext.Books.Include(b => b.Authors)
                     .Where(b => b.BookName.ToLower().Contains(SearchQuery.ToLower()))
                     .ToListAsync();
+                TotalPages = (int)Math.Ceiling((double)(books?.Count ?? 0) / PageSize);
+                CurrentPage = 1;
             }
             catch (Exception ex)
             {
                 errorMessage = "Failed to perform search. Please try again later.";
                 Console.WriteLine($"Error searching books: {ex.Message}");
             }
+        }
+    }
+
+    private void PreviousPage()
+    {
+        if (CurrentPage > 1)
+        {
+            CurrentPage--;
+        }
+    }
+
+    private void NextPage()
+    {
+        if (CurrentPage < TotalPages)
+        {
+            CurrentPage++;
         }
     }
 
