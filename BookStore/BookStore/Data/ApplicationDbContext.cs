@@ -4,7 +4,6 @@ using BookStore.Components.Models;
 
 namespace BookStore.Data
 {
-    // Успадкування від IdentityDbContext для інтеграції Identity та включення ApplicationUser до моделі
     public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
     {
         public ApplicationDbContext(DbContextOptions<ApplicationDbContext> options)
@@ -16,20 +15,19 @@ namespace BookStore.Data
         public DbSet<Author> Authors { get; set; }
         public DbSet<Cart> Carts { get; set; }
         public DbSet<CartItem> CartItems { get; set; }
+        public DbSet<PdfBook> PdfBooks { get; set; }
+        public DbSet<PurchasedBook> PurchasedBooks { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
-            // Не забуваємо викликати базовий метод для налаштування моделей Identity
             base.OnModelCreating(modelBuilder);
 
-            // Seed Authors
             modelBuilder.Entity<Author>().HasData(
                 new Author { Id = 1, FirstName = "J.K.", LastName = "Rowling" },
                 new Author { Id = 2, FirstName = "James", LastName = "Clear" },
                 new Author { Id = 3, FirstName = "Taras", LastName = "Shevchenko" }
             );
 
-            // Seed Books
             modelBuilder.Entity<Book>().HasData(
                 new Book
                 {
@@ -88,7 +86,6 @@ namespace BookStore.Data
                 }
             );
 
-            // Seed даних для зв'язку many-to-many між Authors та Books
             modelBuilder.Entity("AuthorBook").HasData(
                 new { AuthorsId = 1, BooksId = 1 },
                 new { AuthorsId = 1, BooksId = 2 },
@@ -96,6 +93,18 @@ namespace BookStore.Data
                 new { AuthorsId = 2, BooksId = 4 },
                 new { AuthorsId = 1, BooksId = 5 },
                 new { AuthorsId = 3, BooksId = 5 }
+            );
+
+            // Налаштування зв'язку PdfBook з BookId
+            modelBuilder.Entity<PdfBook>()
+                .HasIndex(pb => pb.BookId)
+                .IsUnique(); // Кожна книжка має лише один PDF
+
+            modelBuilder.Entity<PdfBook>().HasData(
+                new PdfBook { Id = 1, BookId = 1, FilePath = "/pdf/HarryPotter1.pdf" },
+                new PdfBook { Id = 2, BookId = 2, FilePath = "/pdf/HarryPotter2.pdf" },
+                new PdfBook { Id = 3, BookId = 3, FilePath = "/pdf/HarryPotter3.pdf" }
+
             );
         }
     }
