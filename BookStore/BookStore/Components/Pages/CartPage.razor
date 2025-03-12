@@ -54,18 +54,15 @@ else
         userId = user.FindFirstValue(ClaimTypes.NameIdentifier);
         if (string.IsNullOrEmpty(userId))
         {
-            // У разі ненормальної ситуації – перенаправляємо користувача на логін
             NavigationManager.NavigateTo("/Account/Login");
             return;
         }
 
-        // Завантажуємо кошик користувача разом з інформацією про книги
         cart = await DbContext.Carts
             .Include(c => c.Items)
                 .ThenInclude(ci => ci.Book)
             .FirstOrDefaultAsync(c => c.UserId == userId);
 
-        // Якщо кошик не знайдено, створюємо новий
         if (cart == null)
         {
             cart = new Cart { UserId = userId };
@@ -94,9 +91,24 @@ else
         }
     }
 
-    private void Checkout()
+    private async Task Checkout()
     {
-        // Реалізуйте логіку оформлення замовлення або перенаправте на відповідну сторінку
-        NavigationManager.NavigateTo("/Checkout");
+        if (cart == null || !cart.Items.Any())
+        {
+            return;
+        }
+
+        var purchasedBooks = cart.Items.Select(item => new PurchasedBook
+            {
+                UserId = userId!,
+                BookId = item.Book.Id
+            }).ToList();
+
+        await DbContext.PurchasedBooks.AddRangeAsync(purchasedBooks);
+        DbContext.CartItems.RemoveRange(cart.Items);
+        cart.Items.Clear();
+        await DbContext.SaveChangesAsync();
+
+        NavigationManager.NavigateTo("/PurchasedBooks");
     }
 }
