@@ -1,0 +1,79 @@
+﻿@page "/PurchasedBooks"
+@attribute [Authorize]
+@rendermode InteractiveServer
+@inject ApplicationDbContext DbContext
+@inject AuthenticationStateProvider AuthStateProvider
+@inject NavigationManager NavigationManager
+
+<h1 class="mt-4">Your Purchased Books</h1>
+
+@if (purchasedBooks == null)
+{
+    <p>Loading your purchased books...</p>
+}
+else if (!purchasedBooks.Any())
+{
+    <p>You have not purchased any books yet.</p>
+}
+else
+{
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Book</th>
+                <th>Genre</th>
+                <th>Language</th>
+                <th>Price</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var book in purchasedBooks)
+            {
+                <tr>
+                    <td>@book.BookName</td>
+                    <td>@book.Genre</td>
+                    <td>@book.AvailableLanguage</td>
+                    <td>@book.Price.ToString("C")</td>
+                    <td>
+                        <button class="btn btn-success btn-sm" @onclick="() => DownloadPdf(book.Id)">Download PDF</button>
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}
+
+@code {
+    private List<Book> purchasedBooks = new();
+    private string? userId;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+        userId = user.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (string.IsNullOrEmpty(userId))
+        {
+            return;
+        }
+
+        purchasedBooks = await DbContext.PurchasedBooks
+            .Where(pb => pb.UserId == userId)
+            .Select(pb => pb.Book)
+            .ToListAsync();
+    }
+
+    private async Task DownloadPdf(int bookId)
+    {
+        var pdfBook = await DbContext.PdfBooks.FirstOrDefaultAsync(pb => pb.BookId == bookId);
+        if (pdfBook != null)
+        {
+            var fileUrl = pdfBook.FilePath;
+            if (!string.IsNullOrEmpty(fileUrl))
+            {
+                NavigationManager.NavigateTo(fileUrl, true);
+            }
+        }
+    }
+}
