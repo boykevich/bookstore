@@ -26,7 +26,14 @@ else
         <p><strong>Published:</strong> @book.DateOfPublishment.ToString("MMMM dd, yyyy")</p>
         <p><strong>Languages:</strong> @book.AvailableLanguage</p>
         <p><strong>Authors:</strong> @string.Join(", ", book.Authors.Select(a => $"{a.FirstName} {a.LastName}"))</p>
-        <button class="btn btn-success" @onclick="() => AddToCart(book)">Add to Cart</button>
+        @if (purchasedBooks.Contains(book))
+        {
+            <button class="btn btn-primary" @onclick="NavigateToPurchasedBooks">Already owned</button>
+        }
+        else
+        {
+            <button class="btn btn-success" @onclick="() => AddToCart(book)">Add to cart</button>
+        }
         @if (!string.IsNullOrEmpty(errorMessage))
         {
             <div class="error-overlay">
@@ -43,12 +50,26 @@ else
     [Parameter] public int id { get; set; }
     private Book? book;
     private string errorMessage = "";
+    private string? userId;
+    private List<Book> purchasedBooks = new();
 
     protected override async Task OnInitializedAsync()
     {
         book = await DbContext.Books
             .Include(b => b.Authors)
             .FirstOrDefaultAsync(b => b.Id == id);
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+        userId = user.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (string.IsNullOrEmpty(userId))
+        {
+            return;
+        }
+
+        purchasedBooks = await DbContext.PurchasedBooks
+            .Where(pb => pb.UserId == userId)
+            .Select(pb => pb.Book)
+            .ToListAsync();
     }
 
     private async Task AddToCart(Book book)
@@ -95,5 +116,10 @@ else
         }
 
         await DbContext.SaveChangesAsync();
+    }
+
+    private void NavigateToPurchasedBooks()
+    {
+        NavigationManager.NavigateTo("/PurchasedBooks");
     }
 }
