@@ -1,20 +1,38 @@
 ﻿@page "/"
+@using System.Security.Claims
 @using Microsoft.AspNetCore.Components
 @using Microsoft.EntityFrameworkCore
-@using System.Security.Claims
+@rendermode InteractiveServer
+
 @inject ApplicationDbContext DbContext
 @inject AuthenticationStateProvider AuthStateProvider
-
-<PageTitle>Home</PageTitle>
+@inject NavigationManager NavigationManager
+<link rel="stylesheet" href="error.css" />
 
 <!-- Top Navigation Bar -->
+
+<h1 class="text-center mt-4">Book List</h1>
+
+@* <div class="search-bar text-center mb-4"> *@
+@*     <InputText @bind-Value="SearchQuery" placeholder="Enter desired book..." class="search-input" /> *@
+@*     <button @onclick="PerformSearch" class="search-button btn btn-primary">🔍 Search</button> *@
+@*     @if (!string.IsNullOrEmpty(searchError)) *@
+@*     { *@
+@*         <span class="text-danger ml-2">@searchError</span> *@
+@*     } *@
+@* </div> *@
+
 <div class="top-bar">
     <div class="logo">
         <h2>BookStore</h2>
     </div>
     <div class="search-bar">
         <InputText @bind-Value="SearchQuery" placeholder="Enter desired book..." class="search-input" />
-        <button @onclick="PerformSearch" class="search-button">🔍 Search</button>
+        <button @onclick="PerformSearch" class="search-button btn btn-primary">🔍 Search</button>
+        @if (!string.IsNullOrEmpty(searchError))
+        {
+            <span class="text-danger ml-2">@searchError</span>
+        }
     </div>
     <div class="cart">
         <a href="/cartpage">
@@ -23,33 +41,216 @@
     </div>
 </div>
 
-<!-- Main Content -->
-<div class="main-content">
-    <p>Welcome to your new app.</p>
-</div>
+@if (books == null)
+{
+    <p>Loading...</p>
+}
+else if (!books.Any())
+{
+    <p class="text-center">No books found.</p>
+}
+else
+{
+    <div class="container mt-4">
+        <div class="row">
+            @foreach (var book in books.Skip((CurrentPage - 1) * PageSize).Take(PageSize))
+            {
+                <div class="col-md-4 mb-4">
+                    <div class="card shadow-lg h-100">
+                        <div class="d-flex justify-content-center align-items-center" style="height: 350px; overflow: hidden;">
+                            <img src="@book.ImagePath" alt="Book Cover" class="card-img-top" style="max-height: 100%; width: auto;">
+                        </div>
+                        <div class="card-body d-flex flex-column">
+                            <h5 class="card-title">@book.BookName</h5>
+                            <p class="card-text">
+                                <strong>Author(s):</strong>
+                                @string.Join(", ", book.Authors.Select(a => $"{a.FirstName} {a.LastName}"))
+                            </p>
+                            <p class="card-text"><strong>Genre:</strong> @book.Genre</p>
+                            <p class="card-text"><strong>Language:</strong> @book.AvailableLanguage</p>
+                            <p class="card-text"><strong>Price:</strong> $@book.Price.ToString("0.00")</p>
+                            <div class="mt-auto d-flex justify-content-between">
+                                <a href="/BookPage/@book.Id" class="btn btn-primary">View Details</a>
+                                @if (purchasedBooks.Contains(book))
+                                {
+                                    <button class="btn btn-primary" @onclick="NavigateToPurchasedBooks">Already owned</button>
+                                }
+                                else
+                                {
+                                    <button class="btn btn-success" @onclick="() => AddToCart(book)">Add to cart</button>
+                                }
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+    </div>
+
+    <div class="pagination text-center mt-4">
+        <button class="btn btn-secondary" @onclick="PreviousPage" disabled="@(CurrentPage == 1)">Previous</button>
+        <span class="mx-2">Page @CurrentPage of @TotalPages</span>
+        <button class="btn btn-secondary" @onclick="NextPage" disabled="@(CurrentPage == TotalPages)">Next</button>
+    </div>
+
+    @if (!string.IsNullOrEmpty(errorMessage))
+    {
+        <div class="error-overlay">
+            <div class="error-message">
+                <button class="close-btn" @onclick="() => errorMessage = string.Empty">&times;</button>
+                @errorMessage
+            </div>
+        </div>
+    }
+}
 
 @code {
-    private string SearchQuery { get; set; } = "";
+    private List<Book>? books;
+    private string SearchQuery = "";
+    private string errorMessage = "";
+    private string searchError = "";
+    private int CurrentPage = 1;
+    private const int PageSize = 9;
+    private int TotalPages = 1;
+    private string? userId;
+    private List<Book> purchasedBooks = new();
     private Cart? cart;
-
-    private void PerformSearch()
-    {
-        Console.WriteLine($"Searching for: {SearchQuery}");
-        // NavigationManager.NavigateTo($"/search?query={SearchQuery}");
-    }
 
     protected override async Task OnInitializedAsync()
     {
+        await LoadBooks();
         var authState = await AuthStateProvider.GetAuthenticationStateAsync();
         var user = authState.User;
+        userId = user.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (string.IsNullOrEmpty(userId))
+        {
+            return;
+        }
+        
 
         if (user.Identity?.IsAuthenticated == true)
         {
-            var userId = user.FindFirstValue(ClaimTypes.NameIdentifier);
-
             cart = await DbContext.Carts
                 .Include(c => c.Items)
                 .FirstOrDefaultAsync(c => c.UserId == userId);
         }
+
+
+        purchasedBooks = await DbContext.PurchasedBooks
+            .Where(pb => pb.UserId == userId)
+            .Select(pb => pb.Book)
+            .ToListAsync();
+    }
+
+    private async Task LoadBooks()
+    {
+        try
+        {
+            books = await DbContext.Books.Include(b => b.Authors).ToListAsync();
+            TotalPages = (int)Math.Ceiling((double)(books?.Count ?? 0) / PageSize);
+        }
+        catch (Exception ex)
+        {
+            errorMessage = "Failed to load books. Please try again later.";
+            Console.WriteLine($"Error loading books: {ex.Message}");
+        }
+    }
+
+    private async Task PerformSearch()
+    {
+        if (string.IsNullOrWhiteSpace(SearchQuery))
+        {
+            searchError = "";
+            await LoadBooks();
+        }
+        else if (SearchQuery.Trim().Length < 3)
+        {
+            searchError = "Введіть хоча б 3 символи";
+            return;
+        }
+        else
+        {
+            searchError = "";
+            try
+            {
+                books = await DbContext.Books.Include(b => b.Authors)
+                    .Where(b => b.BookName.ToLower().Contains(SearchQuery.ToLower()))
+                    .ToListAsync();
+                TotalPages = (int)Math.Ceiling((double)(books?.Count ?? 0) / PageSize);
+                CurrentPage = 1;
+            }
+            catch (Exception ex)
+            {
+                errorMessage = "Failed to perform search. Please try again later.";
+                Console.WriteLine($"Error searching books: {ex.Message}");
+            }
+        }
+    }
+
+    private void PreviousPage()
+    {
+        if (CurrentPage > 1)
+        {
+            CurrentPage--;
+        }
+    }
+
+    private void NextPage()
+    {
+        if (CurrentPage < TotalPages)
+        {
+            CurrentPage++;
+        }
+    }
+
+    private async Task AddToCart(Book book)
+    {
+        Console.WriteLine("AddToCart викликано для книги: " + book.BookName);
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+        if (user.Identity is null || !user.Identity.IsAuthenticated)
+        {
+            var returnUrl = Uri.EscapeDataString(NavigationManager.Uri);
+            NavigationManager.NavigateTo($"/Account/Login?returnUrl={returnUrl}");
+            return;
+        }
+
+        var userId = user.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (string.IsNullOrEmpty(userId))
+        {
+            var returnUrl = Uri.EscapeDataString(NavigationManager.Uri);
+            NavigationManager.NavigateTo($"/Account/Login?returnUrl={returnUrl}");
+            return;
+        }
+
+        var cart = await DbContext.Carts
+            .Include(c => c.Items)
+            .FirstOrDefaultAsync(c => c.UserId == userId);
+
+        if (cart == null)
+        {
+            cart = new Cart { UserId = userId };
+            DbContext.Carts.Add(cart);
+            await DbContext.SaveChangesAsync();
+        }
+
+        var cartItem = cart.Items.FirstOrDefault(ci => ci.BookId == book.Id);
+        if (cartItem == null)
+        {
+            cartItem = new CartItem { BookId = book.Id };
+            cart.Items.Add(cartItem);
+            errorMessage = string.Empty;
+        }
+        else
+        {
+            errorMessage = "Ти шо єблан! Нахуя тобі 2 копії тієї самої книжки, єбанат!";
+        }
+
+        await DbContext.SaveChangesAsync();
+    }
+
+    private void NavigateToPurchasedBooks()
+    {
+        NavigationManager.NavigateTo("/PurchasedBooks");
     }
 }

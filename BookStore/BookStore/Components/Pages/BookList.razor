@@ -2,6 +2,7 @@
 @using System.Security.Claims
 @using Microsoft.AspNetCore.Components
 @using Microsoft.EntityFrameworkCore
+@using BookStore.Components.Models
 @rendermode InteractiveServer
 
 @inject ApplicationDbContext DbContext
@@ -11,13 +12,23 @@
 
 <h1 class="text-center mt-4">Book List</h1>
 
-<div class="search-bar text-center mb-4">
-    <InputText @bind-Value="SearchQuery" placeholder="Enter desired book..." class="search-input" />
-    <button @onclick="PerformSearch" class="search-button btn btn-primary">🔍 Search</button>
-    @if (!string.IsNullOrEmpty(searchError))
-    {
-        <span class="text-danger ml-2">@searchError</span>
-    }
+<div class="top-bar">
+    <div class="logo">
+        <h2>BookStore</h2>
+    </div>
+    <div class="search-bar text-center mb-4">
+        <InputText @bind-Value="SearchQuery" placeholder="Enter desired book..." class="search-input" />
+        <button @onclick="PerformSearch" class="search-button">🔍 Search</button>
+        @if (!string.IsNullOrEmpty(searchError))
+        {
+            <span class="text-danger ml-2">@searchError</span>
+        }
+    </div>
+    <div class="cart">
+        <a href="/cartpage">
+            <span class="cart-icon">🛒</span> <span class="cart-count">@(cart?.Items.Count() ?? 0)</span>
+        </a>
+    </div>
 </div>
 
 @if (books == null)
@@ -93,6 +104,7 @@ else
     private int TotalPages = 1;
     private string? userId;
     private List<Book> purchasedBooks = new();
+    private Cart? cart;
 
     protected override async Task OnInitializedAsync()
     {
@@ -103,6 +115,14 @@ else
         if (string.IsNullOrEmpty(userId))
         {
             return;
+        }
+
+        if (user.Identity?.IsAuthenticated == true)
+        {
+            var userId = user.FindFirstValue(ClaimTypes.NameIdentifier);
+            cart = await DbContext.Carts
+                .Include(c => c.Items)
+                .FirstOrDefaultAsync(c => c.UserId == userId);
         }
 
         purchasedBooks = await DbContext.PurchasedBooks
