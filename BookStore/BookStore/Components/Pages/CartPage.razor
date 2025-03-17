@@ -1,9 +1,11 @@
 ﻿@page "/cartpage"
+@using Stripe.Checkout
 @attribute [Authorize]
 @rendermode InteractiveServer
 @inject ApplicationDbContext DbContext
 @inject AuthenticationStateProvider AuthStateProvider
 @inject NavigationManager NavigationManager
+
 
 <h1 class="mt-4">Your Shopping Cart</h1>
 
@@ -39,7 +41,10 @@ else
         </tbody>
     </table>
     <h4>Total: @cart.Items.Sum(i => i.Book.Price).ToString("C")</h4>
-    <button class="btn btn-primary" @onclick="Checkout">Checkout</button>
+    <form method="post" @formname="checkout-form" @onsubmit="CheckoutAsync">
+        <AntiforgeryToken />
+        <button type="submit" id="checkout-button">Checkout</button>
+    </form>
     <button class="btn btn-warning ms-2" @onclick="ClearCart">Clear Cart</button>
 }
 
@@ -110,5 +115,38 @@ else
         await DbContext.SaveChangesAsync();
 
         NavigationManager.NavigateTo("/PurchasedBooks");
+    }
+    private async Task CheckoutAsync()
+    {
+        if (cart == null || cart.Items == null || !cart.Items.Any())
+        {
+            return;
+        }
+        var domain = NavigationManager.BaseUri.TrimEnd('/');
+
+        var lineItems = cart.Items.Select(p => new SessionLineItemOptions
+            {
+                Quantity = 1,
+                PriceData = new SessionLineItemPriceDataOptions
+                {
+                    Currency = "usd",
+                    UnitAmountDecimal = (long)(p.Book.Price * 100), // Помножуємо на 100 для передачі в центах
+                    ProductData = new SessionLineItemPriceDataProductDataOptions
+                    {
+                        Name = p.Book.BookName
+                    }
+                }
+            }).ToList();
+        var options = new SessionCreateOptions
+            {
+                LineItems = lineItems,
+                Mode = "payment",
+                SuccessUrl = $"{domain}/payment-success?session_id={{CHECKOUT_SESSION_ID}}",
+                CancelUrl = domain,
+            };
+        var service = new SessionService();
+        Session session = await service.CreateAsync(options);
+
+        NavigationManager.NavigateTo(session.Url);
     }
 }
