@@ -44,7 +44,7 @@ namespace BookStore.Data
                     AvailableLanguage = "English",
                     ImagePath = "/images/books/PotterPhilosopher'sStone.png",
                     SmallDescription = "A young boy discovers he is a wizard and embarks on an adventure at Hogwarts.",
-                    Price = 19.99m,
+                    Price = 00.99m,
                     DateOfPublishment = DateTime.SpecifyKind(new DateTime(1997, 6, 26), DateTimeKind.Utc)
                 },
                 new Book
