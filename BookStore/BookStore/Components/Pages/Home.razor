@@ -2,33 +2,50 @@
 @using System.Security.Claims
 @using Microsoft.AspNetCore.Components
 @using Microsoft.EntityFrameworkCore
+@using BookStore.Components.Models
+@using OpenAI
+@using OpenAI.Chat
 @rendermode InteractiveServer
 
 @inject ApplicationDbContext DbContext
 @inject AuthenticationStateProvider AuthStateProvider
 @inject NavigationManager NavigationManager
-<link rel="stylesheet" href="error.css" />
+@inject IConfiguration Configuration
 
-<!-- Top Navigation Bar -->
+
+<link rel="stylesheet" href="~/app.css" />
 
 <h1 class="text-center mt-4">Book List</h1>
 
-@* <div class="search-bar text-center mb-4"> *@
-@*     <InputText @bind-Value="SearchQuery" placeholder="Enter desired book..." class="search-input" /> *@
-@*     <button @onclick="PerformSearch" class="search-button btn btn-primary">🔍 Search</button> *@
-@*     @if (!string.IsNullOrEmpty(searchError)) *@
-@*     { *@
-@*         <span class="text-danger ml-2">@searchError</span> *@
-@*     } *@
-@* </div> *@
+<!-- Floating Chat Button -->
+<button class="chat-toggle" @onclick="() => IsChatOpen = !IsChatOpen">💬</button>
+
+<!-- Assistant Chat Box -->
+@if (IsChatOpen)
+{
+    <div class="chat-window shadow-lg">
+        <div class="chat-header">
+            <h5>Book Assistant</h5>
+            <button class="close-chat" @onclick="() => IsChatOpen = false">&times;</button>
+        </div>
+        <div class="chat-body">
+            <textarea @bind="UserQuery" placeholder="Ask for book recommendations..." class="chat-input"></textarea>
+            <button @onclick="GetRecommendation" class="chat-send">Ask</button>
+            @if (!string.IsNullOrEmpty(AssistantResponse))
+            {
+                <div class="chat-response">@AssistantResponse</div>
+            }
+        </div>
+    </div>
+}
 
 <div class="top-bar">
     <div class="logo">
         <h2>BookStore</h2>
     </div>
-    <div class="search-bar">
+    <div class="search-bar text-center mb-4">
         <InputText @bind-Value="SearchQuery" placeholder="Enter desired book..." class="search-input" />
-        <button @onclick="PerformSearch" class="search-button btn btn-primary">🔍 Search</button>
+        <button @onclick="PerformSearch" class="search-button">🔍 Search</button>
         @if (!string.IsNullOrEmpty(searchError))
         {
             <span class="text-danger ml-2">@searchError</span>
@@ -115,45 +132,31 @@ else
     private string? userId;
     private List<Book> purchasedBooks = new();
     private Cart? cart;
+    private ChatClient _client;
+    private string UserQuery = "";
+    private string AssistantResponse = "";
+    private List<ChatMessage> conversation = new();
+    private bool IsChatOpen = false;
 
     protected override async Task OnInitializedAsync()
     {
+        _client = new ChatClient(model: "gpt-4o", apiKey: Configuration["OpenAI:OpenAIKey"]);
+        conversation.Add(new UserChatMessage("You are a helpful assistant that recommends books based on user preferences."));
         await LoadBooks();
         var authState = await AuthStateProvider.GetAuthenticationStateAsync();
         var user = authState.User;
         userId = user.FindFirstValue(ClaimTypes.NameIdentifier);
-        if (string.IsNullOrEmpty(userId))
-        {
-            return;
-        }
-        
+        if (string.IsNullOrEmpty(userId)) return;
 
         if (user.Identity?.IsAuthenticated == true)
         {
-            cart = await DbContext.Carts
-                .Include(c => c.Items)
-                .FirstOrDefaultAsync(c => c.UserId == userId);
+            cart = await DbContext.Carts.Include(c => c.Items).FirstOrDefaultAsync(c => c.UserId == userId);
         }
-
 
         purchasedBooks = await DbContext.PurchasedBooks
             .Where(pb => pb.UserId == userId)
             .Select(pb => pb.Book)
             .ToListAsync();
-    }
-
-    private async Task LoadBooks()
-    {
-        try
-        {
-            books = await DbContext.Books.Include(b => b.Authors).ToListAsync();
-            TotalPages = (int)Math.Ceiling((double)(books?.Count ?? 0) / PageSize);
-        }
-        catch (Exception ex)
-        {
-            errorMessage = "Failed to load books. Please try again later.";
-            Console.WriteLine($"Error loading books: {ex.Message}");
-        }
     }
 
     private async Task PerformSearch()
@@ -187,6 +190,42 @@ else
         }
     }
 
+    private async Task LoadBooks()
+    {
+        try
+        {
+            books = await DbContext.Books.Include(b => b.Authors).ToListAsync();
+            TotalPages = (int)Math.Ceiling((double)(books?.Count ?? 0) / PageSize);
+        }
+        catch (Exception ex)
+        {
+            errorMessage = "Failed to load books. Please try again later.";
+            Console.WriteLine($"Error loading books: {ex.Message}");
+        }
+    }
+
+    private async Task GetRecommendation()
+    {
+        if (string.IsNullOrEmpty(UserQuery)) return;
+
+        conversation.Add(new UserChatMessage(UserQuery));
+
+        var result = await _client.CompleteChatAsync(conversation);
+
+        if (result?.Value.Content != null && result.Value.Content.Count > 0)
+        {
+            var reply = result.Value.Content[0].Text ?? "No response";
+            AssistantResponse = reply;
+            conversation.Add(result.Value.Content[0].Text);
+        }
+        else
+        {
+            AssistantResponse = "No response received from assistant.";
+        }
+        UserQuery = string.Empty;
+        StateHasChanged();
+    }
+
     private void PreviousPage()
     {
         if (CurrentPage > 1)
@@ -205,7 +244,6 @@ else
 
     private async Task AddToCart(Book book)
     {
-        Console.WriteLine("AddToCart викликано для книги: " + book.BookName);
         var authState = await AuthStateProvider.GetAuthenticationStateAsync();
         var user = authState.User;
         if (user.Identity is null || !user.Identity.IsAuthenticated)
@@ -223,9 +261,7 @@ else
             return;
         }
 
-        var cart = await DbContext.Carts
-            .Include(c => c.Items)
-            .FirstOrDefaultAsync(c => c.UserId == userId);
+        var cart = await DbContext.Carts.Include(c => c.Items).FirstOrDefaultAsync(c => c.UserId == userId);
 
         if (cart == null)
         {
