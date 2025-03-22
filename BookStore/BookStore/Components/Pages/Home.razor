@@ -260,7 +260,10 @@ else
     {
         if (string.IsNullOrEmpty(UserQuery)) return;
 
+        var bookListSummary = string.Join("\n", books.Select(b => $"{b.BookName} by {string.Join(", ", b.Authors.Select(a => a.FirstName + " " + a.LastName))} - {b.Genre}, {b.AvailableLanguage}, ${b.Price}"));
+
         conversation.Add(new UserChatMessage(UserQuery));
+        conversation.Insert(1, new UserChatMessage("Available books in the store:\n" + bookListSummary));
 
         var result = await _client.CompleteChatAsync(conversation);
 
@@ -274,6 +277,7 @@ else
         {
             AssistantResponse = "No response received from assistant.";
         }
+
         UserQuery = string.Empty;
         StateHasChanged();
     }
