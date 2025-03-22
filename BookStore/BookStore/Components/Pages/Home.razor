@@ -1,5 +1,6 @@
 ﻿@page "/"
 @using System.Security.Claims
+@using System.Text.Json
 @using Microsoft.AspNetCore.Components
 @using Microsoft.EntityFrameworkCore
 @using BookStore.Components.Models
@@ -11,7 +12,6 @@
 @inject AuthenticationStateProvider AuthStateProvider
 @inject NavigationManager NavigationManager
 @inject IConfiguration Configuration
-
 
 <link rel="stylesheet" href="~/app.css" />
 
@@ -28,7 +28,7 @@
             <h5>Book Assistant</h5>
             <button class="close-chat" @onclick="() => IsChatOpen = false">&times;</button>
         </div>
-        <div class="chat-body">
+        <div class="chat-body" style="max-height: 300px; overflow-y: auto;">
             <textarea @bind="UserQuery" placeholder="Ask for book recommendations..." class="chat-input"></textarea>
             <button @onclick="GetRecommendation" class="chat-send">Ask</button>
             @if (!string.IsNullOrEmpty(AssistantResponse))
@@ -46,6 +46,29 @@
     <div class="search-bar text-center mb-4">
         <InputText @bind-Value="SearchQuery" placeholder="Enter desired book..." class="search-input" />
         <button @onclick="PerformSearch" class="search-button">🔍 Search</button>
+        <button class="btn btn-outline-secondary ml-2" @onclick="() => ShowFilters = !ShowFilters">@((ShowFilters ? "Hide Filters" : "Show Filters"))</button>
+
+        @if (ShowFilters)
+        {
+            <div class="mt-3 d-flex justify-content-center gap-2 flex-wrap">
+                <select @bind="SelectedGenre" class="form-select w-auto">
+                    <option value="">All Genres</option>
+                    @foreach (var genre in genres)
+                    {
+                        <option value="@genre">@genre</option>
+                    }
+                </select>
+                <select @bind="SelectedLanguage" class="form-select w-auto">
+                    <option value="">All Languages</option>
+                    @foreach (var lang in languages)
+                    {
+                        <option value="@lang">@lang</option>
+                    }
+                </select>
+                <input type="number" placeholder="Max Price" class="form-control w-auto" @bind="MaxPrice" />
+            </div>
+        }
+
         @if (!string.IsNullOrEmpty(searchError))
         {
             <span class="text-danger ml-2">@searchError</span>
@@ -122,6 +145,12 @@ else
 }
 
 @code {
+    public class BookQueryInfo
+    {
+        public string? Genre { get; set; }
+        public string? Language { get; set; }
+        public decimal? MaxPrice { get; set; }
+    }
     private List<Book>? books;
     private string SearchQuery = "";
     private string errorMessage = "";
@@ -138,11 +167,22 @@ else
     private List<ChatMessage> conversation = new();
     private bool IsChatOpen = false;
 
+    private List<string> genres = new();
+    private List<string> languages = new();
+    private string SelectedGenre = "";
+    private string SelectedLanguage = "";
+    private decimal? MaxPrice;
+    private bool ShowFilters = false;
+
     protected override async Task OnInitializedAsync()
     {
         _client = new ChatClient(model: "gpt-4o", apiKey: Configuration["OpenAI:OpenAIKey"]);
         conversation.Add(new UserChatMessage("You are a helpful assistant that recommends books based on user preferences."));
         await LoadBooks();
+
+        genres = await DbContext.Books.Select(b => b.Genre).Distinct().ToListAsync();
+        languages = await DbContext.Books.Select(b => b.AvailableLanguage).Distinct().ToListAsync();
+
         var authState = await AuthStateProvider.GetAuthenticationStateAsync();
         var user = authState.User;
         userId = user.FindFirstValue(ClaimTypes.NameIdentifier);
@@ -161,12 +201,12 @@ else
 
     private async Task PerformSearch()
     {
-        if (string.IsNullOrWhiteSpace(SearchQuery))
+        if (string.IsNullOrWhiteSpace(SearchQuery) && string.IsNullOrWhiteSpace(SelectedGenre) && string.IsNullOrWhiteSpace(SelectedLanguage) && !MaxPrice.HasValue)
         {
             searchError = "";
             await LoadBooks();
         }
-        else if (SearchQuery.Trim().Length < 3)
+        else if (!string.IsNullOrWhiteSpace(SearchQuery) && SearchQuery.Trim().Length < 3)
         {
             searchError = "Введіть хоча б 3 символи";
             return;
@@ -176,9 +216,21 @@ else
             searchError = "";
             try
             {
-                books = await DbContext.Books.Include(b => b.Authors)
-                    .Where(b => b.BookName.ToLower().Contains(SearchQuery.ToLower()))
-                    .ToListAsync();
+                var query = DbContext.Books.Include(b => b.Authors).AsQueryable();
+
+                if (!string.IsNullOrWhiteSpace(SearchQuery))
+                    query = query.Where(b => b.BookName.ToLower().Contains(SearchQuery.ToLower()));
+
+                if (!string.IsNullOrWhiteSpace(SelectedGenre))
+                    query = query.Where(b => b.Genre == SelectedGenre);
+
+                if (!string.IsNullOrWhiteSpace(SelectedLanguage))
+                    query = query.Where(b => b.AvailableLanguage == SelectedLanguage);
+
+                if (MaxPrice.HasValue)
+                    query = query.Where(b => b.Price <= MaxPrice);
+
+                books = await query.ToListAsync();
                 TotalPages = (int)Math.Ceiling((double)(books?.Count ?? 0) / PageSize);
                 CurrentPage = 1;
             }
