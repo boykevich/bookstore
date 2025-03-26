@@ -4,7 +4,7 @@ A Blazor Server application that allows users to browse, purchase, and read book
 This project showcases integration with **ASP.NET Core Identity** for authentication and authorization, **Entity Framework Core** with **PostgreSQL** for data storage, and **Stripe** for payment processing.
 
 <div align="center">
-  <img src="/Users/dkey/Documents/muni/bookstore/webdemo.png" alt="BookStore Screenshot" width="700"/>
+  <img src="/webdemo.png" alt="BookStore Screenshot" width="700"/>
 </div>
 
 ---
