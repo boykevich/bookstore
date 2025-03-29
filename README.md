@@ -18,10 +18,9 @@ This project showcases integration with **ASP.NET Core Identity** for authentica
     - [Installation](#installation)  
     - [Database Setup](#database-setup)  
     - [Stripe Configuration](#stripe-configuration)  
-4. [Usage](#usage)  
-5. [Project Structure](#project-structure)  
-6. [Contributing](#contributing)  
-7. [License](#license)
+4. [Usage](#usage)
+5. [Contributing](#contributing)  
+6. [License](#license)
 
 ---
 
@@ -118,35 +117,6 @@ This project showcases integration with **ASP.NET Core Identity** for authentica
 4. **Browse the books**, add them to your cart, and proceed to checkout. Payment is handled by Stripe if configured.
 
 5. After a successful purchase, your **Purchased Books** will be accessible under the “Purchased Books” menu item.
-
----
-
-## Project Structure
-
-A simplified overview of the main folders and files:
-
-```
-BookStore/
-├── BookStore.csproj
-├── Program.cs                  # Entry point, service configuration
-├── Data/
-│   ├── ApplicationDbContext.cs # EF Core DB context
-│   ├── ApplicationUser.cs      # Identity user model
-│   └── Migrations/             # EF Core migrations
-├── Components/
-│   └── Models/                 # Entity models (Book, Author, etc.)
-├── Pages/
-│   ├── Home.razor
-│   ├── CartPage.razor
-│   ├── BookPage.razor
-│   ├── PaymentSuccess.razor
-│   └── PurchasedBooks.razor
-├── wwwroot/
-│   └── images/
-├── appsettings.json
-├── appsettings.Development.json
-└── README.md
-```
 
 ---
 
