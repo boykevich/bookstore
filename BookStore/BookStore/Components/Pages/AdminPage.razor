@@ -2,7 +2,7 @@
 @attribute [Authorize(Roles = "Admin")]
 @inject ApplicationDbContext Db
 @inject AuthenticationStateProvider AuthStateProvider
-@using BookStore.Components.Models
+@inject IWebHostEnvironment Env
 @rendermode InteractiveServer
 
 <h2>Admin - Manage Books</h2>
@@ -21,10 +21,12 @@ else
     <table class="table">
         <thead>
         <tr>
+            <th>Image</th>
             <th>Name</th>
             <th>Genre</th>
             <th>Price</th>
             <th>Language</th>
+            <th>PDF</th>
             <th>Actions</th>
         </tr>
         </thead>
@@ -32,10 +34,22 @@ else
         @foreach (var book in books)
         {
             <tr>
+                <td>
+                    @if (!string.IsNullOrEmpty(book.ImagePath))
+                    {
+                        <img src="@book.ImagePath" style="max-height:100px" alt="Cover" />
+                    }
+                </td>
                 <td>@book.BookName</td>
                 <td>@book.Genre</td>
                 <td>@($"${book.Price:0.00}")</td>
                 <td>@book.AvailableLanguage</td>
+                <td>
+                    @if (!string.IsNullOrEmpty(book.PdfBook?.FilePath))
+                    {
+                        <a href="@book.PdfBook.FilePath" target="_blank">Download</a>
+                    }
+                </td>
                 <td>
                     <button class="btn btn-sm btn-primary" @onclick="async () => await EditBook(book)">Edit</button>
                     <button class="btn btn-sm btn-danger" @onclick="async () => await DeleteBook(book.Id)">Delete</button>
@@ -80,8 +94,15 @@ else
         <div class="form-group">
             <label>PDF File:</label>
             <InputFile OnChange="OnPdfUpload" accept=".pdf" />
-        </div>
 
+            @if (!string.IsNullOrEmpty(uploadedPdfPath))
+            {
+                <p>
+                    <a href="@uploadedPdfPath" target="_blank">📄 Preview uploaded PDF</a>
+                </p>
+            }
+        </div>
+        
         <div class="form-group mt-2">
             <button class="btn btn-success" type="submit">Save</button>
             <button class="btn btn-secondary" type="button" @onclick="ResetForm">Cancel</button>
@@ -104,7 +125,9 @@ else
 
     private async Task LoadBooks()
     {
-        books = await Db.Books.ToListAsync();
+        books = await Db.Books
+            .Include(b => b.PdfBook)
+            .ToListAsync();
     }
 
     private async Task EditBook(Book book)
@@ -127,7 +150,7 @@ else
         if (selectedBook.Id == 0)
         {
             Db.Books.Add(selectedBook);
-            statusMessage = "Book added!";
+            statusMessage = $"Book {selectedBook.BookName} added!";
         }
         else
         {
@@ -140,7 +163,7 @@ else
                 bookInDb.AvailableLanguage = selectedBook.AvailableLanguage;
                 bookInDb.ImagePath = selectedBook.ImagePath;
 
-                statusMessage = "Book updated!";
+                statusMessage = $"Book {selectedBook.BookName} updated!";
             }
         }
 
@@ -175,11 +198,12 @@ else
         var book = await Db.Books.FindAsync(id);
         if (book != null)
         {
+            var bookName = book.BookName;
             Db.Books.Remove(book);
             await Db.SaveChangesAsync();
             await LoadBooks();
             selectedBook = new Book();
-            statusMessage = "Book deleted.";
+            statusMessage = $"Book {bookName} deleted.";
             StateHasChanged();
         }
     }
@@ -196,25 +220,33 @@ else
 
         var ext = Path.GetExtension(uploadedImage.Name);
         var newFileName = $"{Guid.NewGuid()}{ext}";
-        var path = Path.Combine("wwwroot/images/books", newFileName);
-
-        using var stream = new FileStream(path, FileMode.Create);
-        await uploadedImage.OpenReadStream(10_000_000).CopyToAsync(stream);
-
+        var folder = Path.Combine(Env.WebRootPath, "images", "books");
+        Directory.CreateDirectory(folder); 
+        var fullPath = Path.Combine(folder, newFileName);
+        await using var fs = new FileStream(fullPath, FileMode.Create);
+        await uploadedImage.OpenReadStream(10_000_000).CopyToAsync(fs);
         selectedBook.ImagePath = $"/images/books/{newFileName}";
+        StateHasChanged();  
     }
 
     private async Task OnPdfUpload(InputFileChangeEventArgs e)
     {
         uploadedPdf = e.File;
-
         var ext = Path.GetExtension(uploadedPdf.Name);
         var newFileName = $"{Guid.NewGuid()}{ext}";
-        var path = Path.Combine("wwwroot/pdf", newFileName);
 
-        using var stream = new FileStream(path, FileMode.Create);
-        await uploadedPdf.OpenReadStream(50_000_000).CopyToAsync(stream);
+        // Build the absolute folder path under wwwroot
+        var folder = Path.Combine(Env.WebRootPath, "pdf");
+        Directory.CreateDirectory(folder);
 
+        // Write the file
+        var fullPath = Path.Combine(folder, newFileName);
+        await using var fs = new FileStream(fullPath, FileMode.Create);
+        await uploadedPdf.OpenReadStream(50_000_000).CopyToAsync(fs);
+
+        // Store the public URL
         uploadedPdfPath = $"/pdf/{newFileName}";
+
+        StateHasChanged();
     }
 }
