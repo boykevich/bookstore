@@ -22,7 +22,7 @@ else
         <p><strong>Genre:</strong> @book.Genre</p>
         <img src="@book.ImagePath" width="200" />
         <p>@book.SmallDescription</p>
-        <p><strong>Price:</strong> $@book.Price</p>
+        <p><strong>Price:</strong> @(isAdmin ? "$0.00" : $"${book.Price:0.00}")</p>
         <p><strong>Published:</strong> @book.DateOfPublishment.ToString("MMMM dd, yyyy")</p>
         <p><strong>Languages:</strong> @book.AvailableLanguage</p>
         <p><strong>Authors:</strong> @string.Join(", ", book.Authors.Select(a => $"{a.FirstName} {a.LastName}"))</p>
@@ -30,10 +30,15 @@ else
         {
             <button class="btn btn-primary" @onclick="NavigateToPurchasedBooks">Already owned</button>
         }
+        else if (isAdmin)
+        {
+            <button class="btn btn-info" @onclick="AddToLibrary">Add to Library (Free)</button>
+        }
         else
         {
             <button class="btn btn-success" @onclick="() => AddToCart(book)">Add to cart</button>
         }
+
         @if (!string.IsNullOrEmpty(errorMessage))
         {
             <div class="error-overlay">
@@ -52,6 +57,7 @@ else
     private string errorMessage = "";
     private string? userId;
     private List<Book> purchasedBooks = new();
+    private bool isAdmin;
 
     protected override async Task OnInitializedAsync()
     {
@@ -61,6 +67,7 @@ else
         var authState = await AuthStateProvider.GetAuthenticationStateAsync();
         var user = authState.User;
         userId = user.FindFirstValue(ClaimTypes.NameIdentifier);
+        isAdmin = user.IsInRole("Admin");
         if (string.IsNullOrEmpty(userId))
         {
             return;
@@ -70,6 +77,28 @@ else
             .Where(pb => pb.UserId == userId)
             .Select(pb => pb.Book)
             .ToListAsync();
+    }
+    
+    private async Task AddToLibrary()
+    {
+        if (string.IsNullOrEmpty(userId) || book == null)
+            return;
+
+        var alreadyOwned = await DbContext.PurchasedBooks
+            .AnyAsync(pb => pb.UserId == userId && pb.BookId == book.Id);
+
+        if (!alreadyOwned)
+        {
+            var purchasedBook = new PurchasedBook
+            {
+                UserId = userId,
+                BookId = book.Id,
+            };
+
+            DbContext.PurchasedBooks.Add(purchasedBook);
+            await DbContext.SaveChangesAsync();
+            purchasedBooks.Add(book);
+        }
     }
 
     private async Task AddToCart(Book book)

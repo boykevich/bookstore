@@ -1,0 +1,283 @@
+@page "/admin"
+@attribute [Authorize(Roles = "Admin")]
+@inject ApplicationDbContext Db
+@inject AuthenticationStateProvider AuthStateProvider
+@inject IWebHostEnvironment Env
+@rendermode InteractiveServer
+
+<h2>Admin - Manage Books</h2>
+
+@if (!string.IsNullOrEmpty(statusMessage))
+{
+    <div class="alert alert-info">@statusMessage</div>
+}
+
+@if (books == null)
+{
+    <p><em>Loading books...</em></p>
+}
+else
+{
+    <table class="table">
+        <thead>
+        <tr>
+            <th>Image</th>
+            <th>Name</th>
+            <th>Genre</th>
+            <th>Price</th>
+            <th>Language</th>
+            <th>PDF</th>
+            <th>Actions</th>
+        </tr>
+        </thead>
+        <tbody>
+        @foreach (var book in books)
+        {
+            <tr>
+                <td>
+                    @if (!string.IsNullOrEmpty(book.ImagePath))
+                    {
+                        <img src="@book.ImagePath" style="max-height:100px" alt="Cover" />
+                    }
+                </td>
+                <td>@book.BookName</td>
+                <td>@book.Genre</td>
+                <td>@($"${book.Price:0.00}")</td>
+                <td>@book.AvailableLanguage</td>
+                <td>
+                    @if (!string.IsNullOrEmpty(book.PdfBook?.FilePath))
+                    {
+                        <a href="@book.PdfBook.FilePath" target="_blank">Download</a>
+                    }
+                </td>
+                <td>
+                    <button class="btn btn-sm btn-primary" @onclick="async () => await EditBook(book)">Edit</button>
+                    <button class="btn btn-sm btn-danger" @onclick="async () => await DeleteBook(book.Id)">Delete</button>
+                </td>
+            </tr>
+        }
+        </tbody>
+    </table>
+
+    <nav>
+        <ul class="pagination">
+            <li class="page-item @(currentPage == 1 ? "disabled" : "")">
+                <button class="page-link" @onclick="() => LoadBooks(currentPage - 1)">Previous</button>
+            </li>
+
+            @for (int i = 1; i <= totalPages; i++)
+            {
+                var currIndex = i;
+                <li class="page-item @(currentPage == currIndex ? "active" : "")">
+                    <button class="page-link" @onclick="() => LoadBooks(currIndex)">@i</button>
+                </li>
+            }
+
+            <li class="page-item @(currentPage == totalPages ? "disabled" : "")">
+                <button class="page-link" @onclick="() => LoadBooks(currentPage + 1)">Next</button>
+            </li>
+        </ul>
+    </nav>
+
+    <hr />
+    <h4>@(selectedBook.Id == 0 ? "Add New Book" : "Edit Book")</h4>
+
+    <EditForm Model="@selectedBook" OnValidSubmit="@SaveBook">
+        <DataAnnotationsValidator />
+        <ValidationSummary />
+
+        <div class="form-group">
+            <label>Name:</label>
+            <InputText class="form-control" @bind-Value="selectedBook.BookName" />
+        </div>
+
+        <div class="form-group">
+            <label>Genre:</label>
+            <InputText class="form-control" @bind-Value="selectedBook.Genre" />
+        </div>
+
+        <div class="form-group">
+            <label>Price:</label>
+            <InputNumber class="form-control" @bind-Value="selectedBook.Price" />
+        </div>
+
+        <div class="form-group">
+            <label>Language:</label>
+            <InputText class="form-control" @bind-Value="selectedBook.AvailableLanguage" />
+        </div>
+
+        <div class="form-group">
+            <label>Image:</label>
+            <InputFile OnChange="OnImageUpload" accept="image/*" />
+        </div>
+
+        <div class="form-group">
+            <label>PDF File:</label>
+            <InputFile OnChange="OnPdfUpload" accept=".pdf" />
+
+            @if (!string.IsNullOrEmpty(uploadedPdfPath))
+            {
+                <p>
+                    <a href="@uploadedPdfPath" target="_blank">📄 Preview uploaded PDF</a>
+                </p>
+            }
+        </div>
+        
+        <div class="form-group mt-2">
+            <button class="btn btn-success" type="submit">Save</button>
+            <button class="btn btn-secondary" type="button" @onclick="ResetForm">Cancel</button>
+        </div>
+    </EditForm>
+}
+
+@code {
+    private int currentPage = 1;
+    private int pageSize   = 5;   // or whatever number of rows you want per page
+    private int totalCount;
+    private int totalPages;
+    private List<Book> books;
+    private Book selectedBook = new();
+    private string statusMessage;
+    private IBrowserFile uploadedImage;
+    private IBrowserFile uploadedPdf;
+    private string uploadedPdfPath;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadBooks(1);
+    }
+
+    private async Task LoadBooks(int page = 1)
+    {
+        currentPage = page;
+        totalCount = await Db.Books.CountAsync();
+        books = await Db.Books
+            .Include(b => b.PdfBook)
+            .Skip((currentPage - 1) * pageSize)
+            .Take(pageSize)
+            .ToListAsync();
+        totalPages = (int)Math.Ceiling((double)totalCount / pageSize);
+        
+        StateHasChanged();
+    }
+
+    private async Task EditBook(Book book)
+    {
+        selectedBook = new Book
+        {
+            Id = book.Id,
+            BookName = book.BookName,
+            Genre = book.Genre,
+            Price = book.Price,
+            AvailableLanguage = book.AvailableLanguage,
+            ImagePath = book.ImagePath
+        };
+
+        await InvokeAsync(StateHasChanged);
+    }
+    
+    private async Task SaveBook()
+    {
+        if (selectedBook.Id == 0)
+        {
+            Db.Books.Add(selectedBook);
+            statusMessage = $"Book {selectedBook.BookName} added!";
+        }
+        else
+        {
+            var bookInDb = await Db.Books.FindAsync(selectedBook.Id);
+            if (bookInDb != null)
+            {
+                bookInDb.BookName = selectedBook.BookName;
+                bookInDb.Genre = selectedBook.Genre;
+                bookInDb.Price = selectedBook.Price;
+                bookInDb.AvailableLanguage = selectedBook.AvailableLanguage;
+                bookInDb.ImagePath = selectedBook.ImagePath;
+
+                statusMessage = $"Book {selectedBook.BookName} updated!";
+            }
+        }
+
+        await Db.SaveChangesAsync();
+
+        if (!string.IsNullOrEmpty(uploadedPdfPath))
+        {
+            var pdf = await Db.PdfBooks.FirstOrDefaultAsync(p => p.BookId == selectedBook.Id);
+            if (pdf == null)
+            {
+                pdf = new PdfBook
+                {
+                    BookId = selectedBook.Id,
+                    FilePath = uploadedPdfPath
+                };
+                Db.PdfBooks.Add(pdf);
+            }
+            else
+            {
+                pdf.FilePath = uploadedPdfPath;
+            }
+            await Db.SaveChangesAsync();
+        }
+
+        await LoadBooks();
+        selectedBook = new Book();
+        StateHasChanged();
+    }
+
+    private async Task DeleteBook(int id)
+    {
+        var book = await Db.Books.FindAsync(id);
+        if (book != null)
+        {
+            var bookName = book.BookName;
+            Db.Books.Remove(book);
+            await Db.SaveChangesAsync();
+            await LoadBooks();
+            selectedBook = new Book();
+            statusMessage = $"Book {bookName} deleted.";
+            StateHasChanged();
+        }
+    }
+
+    private void ResetForm()
+    {
+        selectedBook = new Book();
+        statusMessage = string.Empty;
+    }
+
+    private async Task OnImageUpload(InputFileChangeEventArgs e)
+    {
+        uploadedImage = e.File;
+
+        var ext = Path.GetExtension(uploadedImage.Name);
+        var newFileName = $"{Guid.NewGuid()}{ext}";
+        var folder = Path.Combine(Env.WebRootPath, "images", "books");
+        Directory.CreateDirectory(folder); 
+        var fullPath = Path.Combine(folder, newFileName);
+        await using var fs = new FileStream(fullPath, FileMode.Create);
+        await uploadedImage.OpenReadStream(10_000_000).CopyToAsync(fs);
+        selectedBook.ImagePath = $"/images/books/{newFileName}";
+        StateHasChanged();  
+    }
+
+    private async Task OnPdfUpload(InputFileChangeEventArgs e)
+    {
+        uploadedPdf = e.File;
+        var ext = Path.GetExtension(uploadedPdf.Name);
+        var newFileName = $"{selectedBook.BookName.Replace(" ", "") + '-' + Guid.NewGuid()}{ext}";
+
+        // Build the absolute folder path under wwwroot
+        var folder = Path.Combine(Env.WebRootPath, "pdf");
+        Directory.CreateDirectory(folder);
+
+        // Write the file
+        var fullPath = Path.Combine(folder, newFileName);
+        await using var fs = new FileStream(fullPath, FileMode.Create);
+        await uploadedPdf.OpenReadStream(50_000_000).CopyToAsync(fs);
+
+        // Store the public URL
+        uploadedPdfPath = $"/pdf/{newFileName}";
+
+        StateHasChanged();
+    }
+}
