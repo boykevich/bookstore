@@ -60,7 +60,7 @@ This project showcases integration with **ASP.NET Core Identity** for authentica
 
 1. **Clone the repository**:
    ```bash
-   git clone https://github.com/your-username/bookstore.git
+   git clone https://github.com/boykevich/bookstore.git
    cd bookstore
    ```
 
