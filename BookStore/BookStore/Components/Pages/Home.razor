@@ -108,7 +108,7 @@ else
                             </p>
                             <p class="card-text"><strong>Genre:</strong> @book.Genre</p>
                             <p class="card-text"><strong>Language:</strong> @book.AvailableLanguage</p>
-                            <p class="card-text"><strong>Price:</strong> $@book.Price.ToString("0.00")</p>
+                            <p class="card-text"><strong>Price:</strong> @(IsAdmin ? "$0.00" : $"${book.Price:0.00}")</p>
                             <div class="mt-auto d-flex justify-content-between">
                                 <a href="/BookPage/@book.Id" class="btn btn-primary">View Details</a>
                                 @if (purchasedBooks.Contains(book))
@@ -166,6 +166,7 @@ else
     private string AssistantResponse = "";
     private List<ChatMessage> conversation = new();
     private bool IsChatOpen = false;
+    private bool IsAdmin = false;
 
     private List<string> genres = new();
     private List<string> languages = new();
@@ -186,6 +187,7 @@ else
         var authState = await AuthStateProvider.GetAuthenticationStateAsync();
         var user = authState.User;
         userId = user.FindFirstValue(ClaimTypes.NameIdentifier);
+        IsAdmin = user.IsInRole("Admin");
         if (string.IsNullOrEmpty(userId)) return;
 
         if (user.Identity?.IsAuthenticated == true)

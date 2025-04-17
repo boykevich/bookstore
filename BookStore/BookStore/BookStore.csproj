@@ -25,8 +25,19 @@
     </ItemGroup>
 
     <ItemGroup>
-      <Folder Include="wwwroot\images\books\" />
-      <Folder Include="wwwroot\pdf\" />
+      <_ContentIncludedByDefault Remove="wwwroot\images\books\1984.png" />
+      <_ContentIncludedByDefault Remove="wwwroot\images\books\AtomicHabits.png" />
+      <_ContentIncludedByDefault Remove="wwwroot\images\books\BraveNewWorld.png" />
+      <_ContentIncludedByDefault Remove="wwwroot\images\books\Dune.png" />
+      <_ContentIncludedByDefault Remove="wwwroot\images\books\PotterChamberOfSecrets.png" />
+      <_ContentIncludedByDefault Remove="wwwroot\images\books\PotterDeathlyHallows.png" />
+      <_ContentIncludedByDefault Remove="wwwroot\images\books\PotterGobletOfFire.png" />
+      <_ContentIncludedByDefault Remove="wwwroot\images\books\PotterHalf-BloodPrince.png" />
+      <_ContentIncludedByDefault Remove="wwwroot\images\books\PotterOrderofPhoenix.png" />
+      <_ContentIncludedByDefault Remove="wwwroot\images\books\PotterPhilosopher'sStone.png" />
+      <_ContentIncludedByDefault Remove="wwwroot\images\books\PotterPrisonerOfAzkaban.png" />
+      <_ContentIncludedByDefault Remove="wwwroot\images\books\PowerOfHabit.png" />
+      <_ContentIncludedByDefault Remove="wwwroot\images\books\TheHobbit.png" />
     </ItemGroup>
 
 </Project>
