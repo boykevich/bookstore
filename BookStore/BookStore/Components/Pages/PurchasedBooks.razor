@@ -36,7 +36,7 @@ else
                     <td>@book.AvailableLanguage</td>
                     <td>@book.Price.ToString("C")</td>
                     <td>
-                        <button class="btn btn-success btn-sm" @onclick="() => DownloadPdf(book.Id)">Download PDF</button>
+                        <a href="@($"/pdf/{book.Id}")" target="_blank">Read Book</a>
                     </td>
                 </tr>
             }
@@ -62,18 +62,5 @@ else
             .Where(pb => pb.UserId == userId)
             .Select(pb => pb.Book)
             .ToListAsync();
-    }
-
-    private async Task DownloadPdf(int bookId)
-    {
-        var pdfBook = await DbContext.PdfBooks.FirstOrDefaultAsync(pb => pb.BookId == bookId);
-        if (pdfBook != null)
-        {
-            var fileUrl = pdfBook.FilePath;
-            if (!string.IsNullOrEmpty(fileUrl))
-            {
-                NavigationManager.NavigateTo(fileUrl, true);
-            }
-        }
     }
 }
