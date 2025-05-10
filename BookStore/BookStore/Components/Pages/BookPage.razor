@@ -8,51 +8,63 @@
 
 <link rel="stylesheet" href="error.css" />
 
+<div class="container my-5">
+    @if (book == null)
+    {
+        <p>Loading...</p>
+    }
+    else
+    {
+        <div class="card shadow-lg p-4">
+            <div class="row g-4 align-items-center">
+                <!-- Book Cover -->
+                <div class="col-md-4 text-center">
+                    <img src="@GetImageUrl(book.ImagePath)" class="img-fluid rounded" alt="@book.BookName" style="max-height: 400px;" />
+                </div>
 
-<h3>Book Details</h3>
+                <!-- Book Info -->
+                <div class="col-md-8">
+                    <h2 class="fw-bold">@book.BookName</h2>
+                    <p class="mb-2"><strong>Genre:</strong> @book.Genre</p>
+                    <p class="mb-2"><strong>Price:</strong> @(isAdmin ? "$0.00" : $"${book.Price:0.00}")</p>
+                    <p class="mb-2"><strong>Published:</strong> @book.DateOfPublishment.ToString("MMMM dd, yyyy")</p>
+                    <p class="mb-2"><strong>Languages:</strong> @book.AvailableLanguage</p>
+                    <p class="mb-2"><strong>Authors:</strong> @string.Join(", ", book.Authors.Select(a => $"{a.FirstName} {a.LastName}"))</p>
 
-@if (book == null)
-{
-    <p>Loading...</p>
-}
-else
-{
-    <div>
-        <h2>@book.BookName</h2>
-        <p><strong>Genre:</strong> @book.Genre</p>
-        <img src="@book.ImagePath" width="200" />
-        <p>@book.SmallDescription</p>
-        <p><strong>Price:</strong> @(isAdmin ? "$0.00" : $"${book.Price:0.00}")</p>
-        <p><strong>Published:</strong> @book.DateOfPublishment.ToString("MMMM dd, yyyy")</p>
-        <p><strong>Languages:</strong> @book.AvailableLanguage</p>
-        <p><strong>Authors:</strong> @string.Join(", ", book.Authors.Select(a => $"{a.FirstName} {a.LastName}"))</p>
-        @if (purchasedBooks.Contains(book))
-        {
-            <button class="btn btn-primary" @onclick="NavigateToPurchasedBooks">Already owned</button>
-        }
-        else if (isAdmin)
-        {
-            <button class="btn btn-info" @onclick="AddToLibrary">Add to Library (Free)</button>
-        }
-        else
-        {
-            <button class="btn btn-success" @onclick="() => AddToCart(book)">Add to cart</button>
-        }
+                    <p class="mt-4">@book.SmallDescription</p>
 
-        @if (!string.IsNullOrEmpty(errorMessage))
-        {
-            <div class="error-overlay">
-                <div class="error-message">
-                    <button class="close-btn" @onclick="() => errorMessage = string.Empty">&times;</button>
-                    @errorMessage
+                    <!-- Action Buttons -->
+                    <div class="mt-4 d-flex flex-wrap gap-2">
+                        @if (purchasedBooks.Contains(book))
+                        {
+                            <button class="btn btn-primary" @onclick="NavigateToPurchasedBooks">Already owned</button>
+                        }
+                        else if (isAdmin)
+                        {
+                            <button class="btn btn-info" @onclick="AddToLibrary">Add to Library (Free)</button>
+                        }
+                        else
+                        {
+                            <button class="btn btn-success" @onclick="() => AddToCart(book)">Add to cart</button>
+                        }
+                    </div>
+
+                    @if (!string.IsNullOrEmpty(errorMessage))
+                    {
+                        <div class="alert alert-warning mt-4 d-flex justify-content-between align-items-center">
+                            <span>@errorMessage</span>
+                            <button type="button" class="btn-close" @onclick="() => errorMessage = string.Empty"></button>
+                        </div>
+                    }
                 </div>
             </div>
-        }
-    </div>
-}
+        </div>
+    }
+</div>
 
 @code {
     [Parameter] public int id { get; set; }
+
     private Book? book;
     private string errorMessage = "";
     private string? userId;
@@ -64,25 +76,23 @@ else
         book = await DbContext.Books
             .Include(b => b.Authors)
             .FirstOrDefaultAsync(b => b.Id == id);
+
         var authState = await AuthStateProvider.GetAuthenticationStateAsync();
         var user = authState.User;
         userId = user.FindFirstValue(ClaimTypes.NameIdentifier);
         isAdmin = user.IsInRole("Admin");
-        if (string.IsNullOrEmpty(userId))
-        {
-            return;
-        }
+
+        if (string.IsNullOrEmpty(userId)) return;
 
         purchasedBooks = await DbContext.PurchasedBooks
             .Where(pb => pb.UserId == userId)
             .Select(pb => pb.Book)
             .ToListAsync();
     }
-    
+
     private async Task AddToLibrary()
     {
-        if (string.IsNullOrEmpty(userId) || book == null)
-            return;
+        if (string.IsNullOrEmpty(userId) || book == null) return;
 
         var alreadyOwned = await DbContext.PurchasedBooks
             .AnyAsync(pb => pb.UserId == userId && pb.BookId == book.Id);
@@ -90,10 +100,10 @@ else
         if (!alreadyOwned)
         {
             var purchasedBook = new PurchasedBook
-            {
-                UserId = userId,
-                BookId = book.Id,
-            };
+                {
+                    UserId = userId,
+                    BookId = book.Id,
+                };
 
             DbContext.PurchasedBooks.Add(purchasedBook);
             await DbContext.SaveChangesAsync();
@@ -103,9 +113,9 @@ else
 
     private async Task AddToCart(Book book)
     {
-        Console.WriteLine("AddToCart викликано для книги: " + book.BookName);
         var authState = await AuthStateProvider.GetAuthenticationStateAsync();
         var user = authState.User;
+
         if (user.Identity is null || !user.Identity.IsAuthenticated)
         {
             var returnUrl = Uri.EscapeDataString(NavigationManager.Uri);
@@ -141,7 +151,7 @@ else
         }
         else
         {
-            errorMessage = "Ти шо єблан! Нахуя тобі 2 копії тієї самої книжки, єбанат!";
+            errorMessage = "You already have this book. No need for a second copy!";
         }
 
         await DbContext.SaveChangesAsync();
@@ -150,5 +160,11 @@ else
     private void NavigateToPurchasedBooks()
     {
         NavigationManager.NavigateTo("/PurchasedBooks");
+    }
+
+    private string GetImageUrl(string imagePath)
+    {
+        var version = Guid.NewGuid().ToString();
+        return $"https://bookstore-media228.s3.eu-north-1.amazonaws.com{imagePath}?v={version}";
     }
 }
