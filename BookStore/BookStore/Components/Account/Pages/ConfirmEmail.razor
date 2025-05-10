@@ -39,31 +39,31 @@ else
     {
         if (string.IsNullOrEmpty(userId) || string.IsNullOrEmpty(code))
         {
-            confirmationMessage = "Некоректне посилання підтвердження.";
+            confirmationMessage = "Invalid confirmation link.";
             return;
         }
 
-        // Декодування токена
+        // Decode the token
         var decodedCode = Encoding.UTF8.GetString(WebEncoders.Base64UrlDecode(code));
         var user = await UserManager.FindByIdAsync(userId);
         if (user == null)
         {
-            confirmationMessage = "Користувача не знайдено.";
+            confirmationMessage = "User not found.";
             return;
         }
 
         var result = await UserManager.ConfirmEmailAsync(user, decodedCode);
         if (result.Succeeded)
         {
-            confirmationMessage = "Email успішно підтверджено. Тепер ви можете увійти в систему.";
+            confirmationMessage = "Email successfully confirmed. You can now sign in.";
 
-            // За бажанням, можна автоматично виконати вхід:
+            // Optionally, sign in the user automatically:
             // await SignInManager.SignInAsync(user, isPersistent: false);
             // NavigationManager.NavigateTo(returnUrl ?? "/");
         }
         else
         {
-            confirmationMessage = "Помилка підтвердження email.";
+            confirmationMessage = "Error confirming email.";
         }
     }
 }

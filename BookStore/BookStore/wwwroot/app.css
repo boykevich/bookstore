@@ -220,3 +220,40 @@ h1:focus {
     margin-top: 10px;
     white-space: pre-wrap;
 }
+
+.alert {
+    font-size: 0.875rem;
+    max-width: 80%;
+}
+
+.search-bar-wrapper {
+    background: #f8f9fa;
+    border-radius: 1rem;
+    padding: 1rem;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    margin-bottom: 2rem;
+}
+
+admin-form .form-group {
+    margin-bottom: 1rem;
+}
+
+.admin-form label {
+    font-weight: 500;
+    margin-bottom: 0.3rem;
+}
+
+.admin-form textarea {
+    resize: vertical;
+}
+
+.admin-books-table img {
+    border-radius: 6px;
+    border: 1px solid #ddd;
+}
+
+.custom-file-upload {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}

@@ -3,59 +3,53 @@
 @inject ApplicationDbContext Db
 @inject AuthenticationStateProvider AuthStateProvider
 @inject IWebHostEnvironment Env
+@inject IAmazonS3 S3Client
 @rendermode InteractiveServer
-
-<h2>Admin - Manage Books</h2>
 
 @if (!string.IsNullOrEmpty(statusMessage))
 {
     <div class="alert alert-info">@statusMessage</div>
+    // Status messages for feedback (success, errors)
 }
 
 @if (books == null)
 {
     <p><em>Loading books...</em></p>
+    // Show a loading message while books are being fetched
 }
 else
 {
-    <table class="table">
-        <thead>
-        <tr>
-            <th>Image</th>
-            <th>Name</th>
-            <th>Genre</th>
-            <th>Price</th>
-            <th>Language</th>
-            <th>PDF</th>
-            <th>Actions</th>
-        </tr>
+    <table class="table admin-books-table table-striped align-middle">
+        <thead class="table-dark">
+            <tr>
+                <th>Image</th>
+                <th>Name</th>
+                <th>Genre</th>
+                <th>Price</th>
+                <th>Language</th>
+                <th>Actions</th>
+            </tr>
         </thead>
         <tbody>
-        @foreach (var book in books)
-        {
-            <tr>
-                <td>
-                    @if (!string.IsNullOrEmpty(book.ImagePath))
-                    {
-                        <img src="@book.ImagePath" style="max-height:100px" alt="Cover" />
-                    }
-                </td>
-                <td>@book.BookName</td>
-                <td>@book.Genre</td>
-                <td>@($"${book.Price:0.00}")</td>
-                <td>@book.AvailableLanguage</td>
-                <td>
-                    @if (!string.IsNullOrEmpty(book.PdfBook?.FilePath))
-                    {
-                        <a href="@book.PdfBook.FilePath" target="_blank">Download</a>
-                    }
-                </td>
-                <td>
-                    <button class="btn btn-sm btn-primary" @onclick="async () => await EditBook(book)">Edit</button>
-                    <button class="btn btn-sm btn-danger" @onclick="async () => await DeleteBook(book.Id)">Delete</button>
-                </td>
-            </tr>
-        }
+            @foreach (var book in books)
+            {
+                <tr>
+                    <td>
+                        @if (!string.IsNullOrEmpty(book.ImagePath))
+                        {
+                            <img src="@GetImageUrl(book.ImagePath)" style="max-height: 80px;" alt="Cover" />
+                        }
+                    </td>
+                    <td title="@book.SmallDescription">@book.BookName</td>
+                    <td>@book.Genre</td>
+                    <td>@($"${book.Price:0.00}")</td>
+                    <td>@book.AvailableLanguage</td>
+                    <td>
+                        <button class="btn btn-sm btn-outline-primary me-1" @onclick="async () => await EditBook(book)">Edit</button>
+                        <button class="btn btn-sm btn-outline-danger" @onclick="async () => await DeleteBook(book.Id)">Delete</button>
+                    </td>
+                </tr>
+            }
         </tbody>
     </table>
 
@@ -80,9 +74,9 @@ else
     </nav>
 
     <hr />
-    <h4>@(selectedBook.Id == 0 ? "Add New Book" : "Edit Book")</h4>
+    <h4 class="mt-5">@((selectedBook.Id == 0) ? "Add New Book" : "Edit Book")</h4>
 
-    <EditForm Model="@selectedBook" OnValidSubmit="@SaveBook">
+    <EditForm Model="@selectedBook" OnValidSubmit="@SaveBook" class="admin-form mt-3">
         <DataAnnotationsValidator />
         <ValidationSummary />
 
@@ -97,6 +91,11 @@ else
         </div>
 
         <div class="form-group">
+            <label>Authors (comma-separated):</label>
+            <InputText class="form-control" @bind-Value="authorsInput" />
+        </div>
+
+        <div class="form-group">
             <label>Price:</label>
             <InputNumber class="form-control" @bind-Value="selectedBook.Price" />
         </div>
@@ -107,32 +106,47 @@ else
         </div>
 
         <div class="form-group">
-            <label>Image:</label>
-            <InputFile OnChange="OnImageUpload" accept="image/*" />
+            <label>Description:</label>
+            <InputTextArea class="form-control" @bind-Value="selectedBook.SmallDescription" Rows="4" />
+        </div>
+
+        <div class="form-group">
+            <label>Cover Image:</label>
+            <div class="custom-file-upload">
+                <label class="btn btn-outline-primary btn-sm">
+                    Upload Image <InputFile OnChange="OnImageUpload" accept="image/*" class="d-none" />
+                </label>
+                @if (uploadedImage != null)
+                {
+                    <span class="ms-2">@uploadedImage.Name</span>
+                }
+            </div>
         </div>
 
         <div class="form-group">
             <label>PDF File:</label>
-            <InputFile OnChange="OnPdfUpload" accept=".pdf" />
-
-            @if (!string.IsNullOrEmpty(uploadedPdfPath))
-            {
-                <p>
-                    <a href="@uploadedPdfPath" target="_blank">📄 Preview uploaded PDF</a>
-                </p>
-            }
+            <div class="custom-file-upload">
+                <label class="btn btn-outline-primary btn-sm">
+                    Upload PDF <InputFile OnChange="OnPdfUpload" accept=".pdf" class="d-none" />
+                </label>
+                @if (uploadedPdf != null)
+                {
+                    <span class="ms-2">@uploadedPdf.Name</span>
+                }
+            </div>
         </div>
-        
-        <div class="form-group mt-2">
-            <button class="btn btn-success" type="submit">Save</button>
+
+        <div class="form-group mt-3">
+            <button class="btn btn-success me-2" type="submit">💾 Save</button>
             <button class="btn btn-secondary" type="button" @onclick="ResetForm">Cancel</button>
         </div>
     </EditForm>
 }
 
 @code {
+    // Pagination & state
     private int currentPage = 1;
-    private int pageSize   = 5;   // or whatever number of rows you want per page
+    private int pageSize = 5;
     private int totalCount;
     private int totalPages;
     private List<Book> books;
@@ -141,75 +155,169 @@ else
     private IBrowserFile uploadedImage;
     private IBrowserFile uploadedPdf;
     private string uploadedPdfPath;
+    private string authorsInput = string.Empty;
 
+    // Load books on init
     protected override async Task OnInitializedAsync()
     {
         await LoadBooks(1);
+        authorsInput = string.Join(", ", selectedBook.Authors.Select(a => a.FirstName + " " + a.LastName));
     }
 
     private async Task LoadBooks(int page = 1)
     {
         currentPage = page;
         totalCount = await Db.Books.CountAsync();
-        books = await Db.Books
-            .Include(b => b.PdfBook)
-            .Skip((currentPage - 1) * pageSize)
-            .Take(pageSize)
-            .ToListAsync();
+        books = await Db.Books.Include(b => b.PdfBook)
+                               .Skip((currentPage - 1) * pageSize)
+                               .Take(pageSize)
+                               .ToListAsync();
         totalPages = (int)Math.Ceiling((double)totalCount / pageSize);
-        
-        StateHasChanged();
     }
 
+    // For editing an existing book
     private async Task EditBook(Book book)
     {
         selectedBook = new Book
-        {
-            Id = book.Id,
-            BookName = book.BookName,
-            Genre = book.Genre,
-            Price = book.Price,
-            AvailableLanguage = book.AvailableLanguage,
-            ImagePath = book.ImagePath
-        };
+            {
+                Id = book.Id,
+                BookName = book.BookName,
+                Genre = book.Genre,
+                Price = book.Price,
+                AvailableLanguage = book.AvailableLanguage,
+                ImagePath = book.ImagePath,
+                SmallDescription = book.SmallDescription
+            };
 
-        await InvokeAsync(StateHasChanged);
+        authorsInput = string.Join(", ", book.Authors.Select(a => a.FirstName + " " + a.LastName));
     }
-    
+
+    // Save a new or updated book
     private async Task SaveBook()
     {
-        if (selectedBook.Id == 0)
+        var isNew = selectedBook.Id == 0;
+
+        if (isNew)
         {
             Db.Books.Add(selectedBook);
+            await Db.SaveChangesAsync();
+            // Handle existing authors
+            if (selectedBook.Authors != null && selectedBook.Authors.Any())
+            {
+                var existingAuthors = await Db.Authors
+                    .Where(a => selectedBook.Authors.Select(x => x.Id).Contains(a.Id))
+                    .ToListAsync();
+                selectedBook.Authors = existingAuthors;
+                await Db.SaveChangesAsync();
+            }
             statusMessage = $"Book {selectedBook.BookName} added!";
         }
         else
         {
-            var bookInDb = await Db.Books.FindAsync(selectedBook.Id);
+            // Update book fields and authors
+            var bookInDb = await Db.Books.Include(b => b.PdfBook).FirstOrDefaultAsync(b => b.Id == selectedBook.Id);
             if (bookInDb != null)
             {
                 bookInDb.BookName = selectedBook.BookName;
                 bookInDb.Genre = selectedBook.Genre;
                 bookInDb.Price = selectedBook.Price;
                 bookInDb.AvailableLanguage = selectedBook.AvailableLanguage;
-                bookInDb.ImagePath = selectedBook.ImagePath;
+                bookInDb.SmallDescription = selectedBook.SmallDescription;
 
-                statusMessage = $"Book {selectedBook.BookName} updated!";
+                if (selectedBook.Authors != null)
+                {
+                    var authorIds = selectedBook.Authors.Select(a => a.Id).ToList();
+                    var updatedAuthors = await Db.Authors.Where(a => authorIds.Contains(a.Id)).ToListAsync();
+                    bookInDb.Authors = updatedAuthors;
+                }
+
+                selectedBook = bookInDb;
             }
+        }
+
+        // Generate S3 paths
+        var slug = GenerateSlug(selectedBook.BookName);
+        var imageExt = Path.GetExtension(uploadedImage?.Name ?? selectedBook.ImagePath ?? ".png");
+        var pdfExt = Path.GetExtension(uploadedPdf?.Name ?? selectedBook.PdfBook?.FilePath ?? ".pdf");
+        var imageKey = $"/images/books/book-{selectedBook.Id}-{slug}{imageExt}";
+        var pdfKey = $"/pdf/book-{selectedBook.Id}-{slug}{pdfExt}";
+
+        // Upload to S3
+        if (uploadedImage != null)
+        {
+            using var imageStream = uploadedImage.OpenReadStream(10_000_000);
+            await S3Client.PutObjectAsync(new PutObjectRequest
+                {
+                    BucketName = "bookstore-media228",
+                    Key = imageKey.TrimStart('/'),
+                    InputStream = imageStream,
+                    ContentType = uploadedImage.ContentType
+                });
+            selectedBook.ImagePath = imageKey;
+        }
+
+        if (uploadedPdf != null)
+        {
+            using var pdfStream = uploadedPdf.OpenReadStream(50_000_000);
+            await S3Client.PutObjectAsync(new PutObjectRequest
+                {
+                    BucketName = "bookstore-media228",
+                    Key = pdfKey.TrimStart('/'),
+                    InputStream = pdfStream,
+                    ContentType = uploadedPdf.ContentType
+                });
+            uploadedPdfPath = pdfKey;
         }
 
         await Db.SaveChangesAsync();
 
+        // Handle authors by name
+        if (!string.IsNullOrWhiteSpace(authorsInput))
+        {
+            var inputNames = authorsInput.Split(',')
+                .Select(name => name.Trim())
+                .Where(name => !string.IsNullOrWhiteSpace(name))
+                .Distinct()
+                .ToList();
+
+            var matchedAuthors = await Db.Authors
+                .Where(a => inputNames.Contains(a.FirstName + " " + a.LastName))
+                .ToListAsync();
+
+            var missingNames = inputNames
+                .Except(matchedAuthors.Select(a => a.FirstName + " " + a.LastName))
+                .ToList();
+
+            foreach (var name in missingNames)
+            {
+                var parts = name.Split(' ', 2);
+                var first = parts[0];
+                var last = parts.Length > 1 ? parts[1] : "";
+                var newAuthor = new Author { FirstName = first, LastName = last };
+                Db.Authors.Add(newAuthor);
+                matchedAuthors.Add(newAuthor);
+            }
+
+            selectedBook.Authors = matchedAuthors;
+            await Db.SaveChangesAsync();
+        }
+
+        // Validate upload success
+        var imageOk = await DoesS3ObjectExistAsync(S3Client, "bookstore-media228", imageKey.TrimStart('/'));
+        var pdfOk = await DoesS3ObjectExistAsync(S3Client, "bookstore-media228", pdfKey.TrimStart('/'));
+
+        if (!imageOk || !pdfOk)
+        {
+            statusMessage = $" Book saved, but media upload failed.";
+        }
+
+        // Save PDF record in database
         if (!string.IsNullOrEmpty(uploadedPdfPath))
         {
             var pdf = await Db.PdfBooks.FirstOrDefaultAsync(p => p.BookId == selectedBook.Id);
             if (pdf == null)
             {
-                pdf = new PdfBook
-                {
-                    BookId = selectedBook.Id,
-                    FilePath = uploadedPdfPath
-                };
+                pdf = new PdfBook { BookId = selectedBook.Id, FilePath = uploadedPdfPath };
                 Db.PdfBooks.Add(pdf);
             }
             else
@@ -219,23 +327,51 @@ else
             await Db.SaveChangesAsync();
         }
 
+        // Refresh view
         await LoadBooks();
         selectedBook = new Book();
-        StateHasChanged();
+        uploadedPdfPath = "";
+        uploadedImage = null;
+        uploadedPdf = null;
     }
 
+    // Check if file exists in S3
+    private static async Task<bool> DoesS3ObjectExistAsync(IAmazonS3 s3, string bucket, string key)
+    {
+        try
+        {
+            var response = await s3.GetObjectMetadataAsync(bucket, key);
+            return response.HttpStatusCode == System.Net.HttpStatusCode.OK;
+        }
+        catch (AmazonS3Exception e) when (e.StatusCode == System.Net.HttpStatusCode.NotFound)
+        {
+            return false;
+        }
+    }
+
+    // Delete book and its files
     private async Task DeleteBook(int id)
     {
-        var book = await Db.Books.FindAsync(id);
+        var book = await Db.Books.Include(b => b.PdfBook).FirstOrDefaultAsync(b => b.Id == id);
         if (book != null)
         {
-            var bookName = book.BookName;
+            if (!string.IsNullOrEmpty(book.ImagePath))
+            {
+                try { await S3Client.DeleteObjectAsync("bookstore-media228", book.ImagePath.TrimStart('/')); }
+                catch { Console.Error.WriteLine($"⚠️ Failed to delete image: {book.ImagePath}"); }
+            }
+
+            if (!string.IsNullOrEmpty(book.PdfBook?.FilePath))
+            {
+                try { await S3Client.DeleteObjectAsync("bookstore-media228", book.PdfBook.FilePath.TrimStart('/')); }
+                catch { Console.Error.WriteLine($"⚠️ Failed to delete PDF: {book.PdfBook.FilePath}"); }
+            }
+
             Db.Books.Remove(book);
             await Db.SaveChangesAsync();
             await LoadBooks();
             selectedBook = new Book();
-            statusMessage = $"Book {bookName} deleted.";
-            StateHasChanged();
+            statusMessage = $"Book {book.BookName} deleted.";
         }
     }
 
@@ -248,36 +384,57 @@ else
     private async Task OnImageUpload(InputFileChangeEventArgs e)
     {
         uploadedImage = e.File;
-
         var ext = Path.GetExtension(uploadedImage.Name);
-        var newFileName = $"{Guid.NewGuid()}{ext}";
-        var folder = Path.Combine(Env.WebRootPath, "images", "books");
-        Directory.CreateDirectory(folder); 
-        var fullPath = Path.Combine(folder, newFileName);
-        await using var fs = new FileStream(fullPath, FileMode.Create);
-        await uploadedImage.OpenReadStream(10_000_000).CopyToAsync(fs);
-        selectedBook.ImagePath = $"/images/books/{newFileName}";
-        StateHasChanged();  
+        var slug = GenerateSlug(selectedBook.BookName);
+        var key = $"/images/books/book-TEMP-{slug}{ext}";
+
+        using var stream = uploadedImage.OpenReadStream(10_000_000);
+        await S3Client.PutObjectAsync(new PutObjectRequest
+            {
+                BucketName = "bookstore-media228",
+                Key = key,
+                InputStream = stream,
+                ContentType = uploadedImage.ContentType
+            });
+
+        selectedBook.ImagePath = key;
     }
 
     private async Task OnPdfUpload(InputFileChangeEventArgs e)
     {
         uploadedPdf = e.File;
         var ext = Path.GetExtension(uploadedPdf.Name);
-        var newFileName = $"{selectedBook.BookName.Replace(" ", "") + '-' + Guid.NewGuid()}{ext}";
+        var slug = GenerateSlug(selectedBook.BookName);
+        var key = $"/pdf/book-TEMP-{slug}{ext}";
 
-        // Build the absolute folder path under wwwroot
-        var folder = Path.Combine(Env.WebRootPath, "pdf");
-        Directory.CreateDirectory(folder);
+        using var stream = uploadedPdf.OpenReadStream(50_000_000);
+        await S3Client.PutObjectAsync(new PutObjectRequest
+            {
+                BucketName = "bookstore-media228",
+                Key = key,
+                InputStream = stream,
+                ContentType = uploadedPdf.ContentType
+            });
 
-        // Write the file
-        var fullPath = Path.Combine(folder, newFileName);
-        await using var fs = new FileStream(fullPath, FileMode.Create);
-        await uploadedPdf.OpenReadStream(50_000_000).CopyToAsync(fs);
+        uploadedPdfPath = key;
+    }
 
-        // Store the public URL
-        uploadedPdfPath = $"/pdf/{newFileName}";
+    private string GetImageUrl(string imagePath)
+    {
+        var version = Guid.NewGuid().ToString();
+        return $"https://bookstore-media228.s3.eu-north-1.amazonaws.com{imagePath}?v={version}";
+    }
 
-        StateHasChanged();
+    private string GenerateSlug(string input)
+    {
+        return input.ToLower()
+            .Replace(" ", "-")
+            .Replace("'", "")
+            .Replace("’", "")
+            .Replace(",", "")
+            .Replace(".", "")
+            .Replace(":", "")
+            .Replace(";", "")
+            .Replace("--", "-");
     }
 }

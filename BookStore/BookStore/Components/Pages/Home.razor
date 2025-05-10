@@ -1,21 +1,12 @@
 ﻿@page "/"
-@using System.Security.Claims
-@using System.Text.Json
-@using Microsoft.AspNetCore.Components
-@using Microsoft.EntityFrameworkCore
-@using BookStore.Components.Models
-@using OpenAI
-@using OpenAI.Chat
 @rendermode InteractiveServer
-
 @inject ApplicationDbContext DbContext
 @inject AuthenticationStateProvider AuthStateProvider
 @inject NavigationManager NavigationManager
 @inject IConfiguration Configuration
 
+<!-- Load main stylesheet -->
 <link rel="stylesheet" href="~/app.css" />
-
-<h1 class="text-center mt-4">Book List</h1>
 
 <!-- Floating Chat Button -->
 <button class="chat-toggle" @onclick="() => IsChatOpen = !IsChatOpen">💬</button>
@@ -39,55 +30,70 @@
     </div>
 }
 
+<!-- Top Section with Logo, Search Bar and Filters -->
 <div class="top-bar">
     <div class="logo">
         <h2>BookStore</h2>
     </div>
-    <div class="search-bar text-center mb-4">
-        <InputText @bind-Value="SearchQuery" placeholder="Enter desired book..." class="search-input" />
-        <button @onclick="PerformSearch" class="search-button">🔍 Search</button>
-        <button class="btn btn-outline-secondary ml-2" @onclick="() => ShowFilters = !ShowFilters">@((ShowFilters ? "Hide Filters" : "Show Filters"))</button>
+
+    <!-- Search and Filters -->
+    <div class="search-bar-wrapper text-center mb-4">
+        <div class="d-flex justify-content-center align-items-center gap-2 flex-wrap">
+            <!-- Search field -->
+            <InputText @bind-Value="SearchQuery" placeholder="Search books..." class="form-control rounded-pill px-3" style="max-width: 300px;" />
+
+            <!-- Search button -->
+            <button @onclick="PerformSearch" class="btn btn-dark rounded-pill px-4">
+                🔍 Search
+            </button>
+
+            <!-- Toggle filters -->
+            <button class="btn btn-outline-secondary rounded-pill" @onclick="() => ShowFilters = !ShowFilters">
+                @(ShowFilters ? "Hide Filters" : "Show Filters")
+            </button>
+        </div>
 
         @if (ShowFilters)
         {
             <div class="mt-3 d-flex justify-content-center gap-2 flex-wrap">
-                <select @bind="SelectedGenre" class="form-select w-auto">
+                <select @bind="SelectedGenre" class="form-select w-auto rounded-pill">
                     <option value="">All Genres</option>
                     @foreach (var genre in genres)
                     {
                         <option value="@genre">@genre</option>
                     }
                 </select>
-                <select @bind="SelectedLanguage" class="form-select w-auto">
+
+                <select @bind="SelectedLanguage" class="form-select w-auto rounded-pill">
                     <option value="">All Languages</option>
                     @foreach (var lang in languages)
                     {
                         <option value="@lang">@lang</option>
                     }
                 </select>
-                <input type="number" placeholder="Max Price" class="form-control w-auto" @bind="MaxPrice" />
+
+                <input type="number" placeholder="Max Price" class="form-control w-auto rounded-pill" @bind="MaxPrice" />
             </div>
         }
-
-        @if (!string.IsNullOrEmpty(searchError))
-        {
-            <span class="text-danger ml-2">@searchError</span>
-        }
     </div>
+
+    <!-- Cart Icon -->
     <div class="cart">
         <a href="/cartpage">
-            <span class="cart-icon">🛒</span> <span class="cart-count">@(cart?.Items.Count() ?? 0)</span>
+            <span class="cart-icon">🛒</span>
+            <span class="cart-count">@(cart?.Items.Count() ?? 0)</span>
         </a>
     </div>
 </div>
 
+<!-- Book Listing -->
 @if (books == null)
 {
-    <p>Loading...</p>
+    <p>Loading...</p> <!-- While books are being fetched -->
 }
 else if (!books.Any())
 {
-    <p class="text-center">No books found.</p>
+    <p class="text-center">No books found.</p> <!-- If no books matched filters/search -->
 }
 else
 {
@@ -97,27 +103,45 @@ else
             {
                 <div class="col-md-4 mb-4">
                     <div class="card shadow-lg h-100">
+                        <!-- Book Cover Image -->
                         <div class="d-flex justify-content-center align-items-center" style="height: 350px; overflow: hidden;">
                             <img src="@GetImageUrl(book.ImagePath)" alt="@book.BookName" class="card-img-top" style="max-height: 100%; width: auto;">
                         </div>
+                        <!-- Book Info -->
                         <div class="card-body d-flex flex-column">
                             <h5 class="card-title">@book.BookName</h5>
                             <p class="card-text">
-                                <strong>Author(s):</strong>
-                                @string.Join(", ", book.Authors.Select(a => $"{a.FirstName} {a.LastName}"))
+                                <strong>Author(s):</strong> @string.Join(", ", book.Authors.Select(a => $"{a.FirstName} {a.LastName}"))
                             </p>
                             <p class="card-text"><strong>Genre:</strong> @book.Genre</p>
                             <p class="card-text"><strong>Language:</strong> @book.AvailableLanguage</p>
-                            <p class="card-text"><strong>Price:</strong> @(IsAdmin ? "$0.00" : $"${book.Price:0.00}")</p>
+                            <p class="card-text">
+                                <strong>Price:</strong>
+                                @(IsAdmin ? "$0.00" : $"${book.Price:0.00}") <!-- Admins see price as free -->
+                            </p>
                             <div class="mt-auto d-flex justify-content-between">
+                                <!-- View Details Button -->
                                 <a href="/BookPage/@book.Id" class="btn btn-primary">View Details</a>
+
+                                <!-- Conditional Button: Already Owned or Add to Cart -->
                                 @if (purchasedBooks.Contains(book))
                                 {
                                     <button class="btn btn-primary" @onclick="NavigateToPurchasedBooks">Already owned</button>
                                 }
+                                else if (IsAdmin)
+                                {
+                                    <button class="btn btn-info" @onclick="() => AddToLibrary(book)">Add to Library (Free)</button>
+                                }
                                 else
                                 {
                                     <button class="btn btn-success" @onclick="() => AddToCart(book)">Add to cart</button>
+                                    @if (errorMessageBookId == book.Id && !string.IsNullOrEmpty(errorMessage))
+                                    {
+                                        <div class="alert alert-warning mt-2 py-1 px-2 d-inline-block">
+                                            <span>@errorMessage</span>
+                                            <button type="button" class="btn-close btn-sm ms-2" aria-label="Close" @onclick="() => ClearError()"></button>
+                                        </div>
+                                    }
                                 }
                             </div>
                         </div>
@@ -125,32 +149,39 @@ else
                 </div>
             }
         </div>
+        @if (!string.IsNullOrEmpty(errorMessage))
+        {
+            <div class="toast-container position-fixed top-0 end-0 p-3" style="z-index: 1055;">
+                <div class="toast show align-items-center text-white bg-danger border-0 shadow" role="alert">
+                    <div class="d-flex">
+                        <div class="toast-body fw-bold">
+                            @errorMessage
+                        </div>
+                        <button type="button" class="btn-close btn-close-white me-2 m-auto" @onclick="ClearError"></button>
+                    </div>
+                </div>
+            </div>
+        }
     </div>
 
+    <!-- Pagination Navigation -->
     <div class="pagination text-center mt-4">
         <button class="btn btn-secondary" @onclick="PreviousPage" disabled="@(CurrentPage == 1)">Previous</button>
         <span class="mx-2">Page @CurrentPage of @TotalPages</span>
         <button class="btn btn-secondary" @onclick="NextPage" disabled="@(CurrentPage == TotalPages)">Next</button>
     </div>
-
-    @if (!string.IsNullOrEmpty(errorMessage))
-    {
-        <div class="error-overlay">
-            <div class="error-message">
-                <button class="close-btn" @onclick="() => errorMessage = string.Empty">&times;</button>
-                @errorMessage
-            </div>
-        </div>
-    }
 }
 
 @code {
+    // Model to hold user-selected query parameters
     public class BookQueryInfo
     {
         public string? Genre { get; set; }
         public string? Language { get; set; }
         public decimal? MaxPrice { get; set; }
     }
+
+    // Main state variables
     private List<Book>? books;
     private string SearchQuery = "";
     private string errorMessage = "";
@@ -167,7 +198,9 @@ else
     private List<ChatMessage> conversation = new();
     private bool IsChatOpen = false;
     private bool IsAdmin = false;
+    private int? errorMessageBookId = null;
 
+    // Filter state variables
     private List<string> genres = new();
     private List<string> languages = new();
     private string SelectedGenre = "";
@@ -175,15 +208,18 @@ else
     private decimal? MaxPrice;
     private bool ShowFilters = false;
 
+    // Load data on component initialization
     protected override async Task OnInitializedAsync()
     {
         _client = new ChatClient(model: "gpt-4o", apiKey: Configuration["OpenAI:OpenAIKey"]);
         conversation.Add(new UserChatMessage("You are a helpful assistant that recommends books based on user preferences."));
         await LoadBooks();
 
+        // Load genre and language filters
         genres = await DbContext.Books.Select(b => b.Genre).Distinct().ToListAsync();
         languages = await DbContext.Books.Select(b => b.AvailableLanguage).Distinct().ToListAsync();
 
+        // Get user info and check if admin
         var authState = await AuthStateProvider.GetAuthenticationStateAsync();
         var user = authState.User;
         userId = user.FindFirstValue(ClaimTypes.NameIdentifier);
@@ -201,6 +237,7 @@ else
             .ToListAsync();
     }
 
+    // Perform a filtered book search
     private async Task PerformSearch()
     {
         if (string.IsNullOrWhiteSpace(SearchQuery) && string.IsNullOrWhiteSpace(SelectedGenre) && string.IsNullOrWhiteSpace(SelectedLanguage) && !MaxPrice.HasValue)
@@ -210,7 +247,7 @@ else
         }
         else if (!string.IsNullOrWhiteSpace(SearchQuery) && SearchQuery.Trim().Length < 3)
         {
-            searchError = "Введіть хоча б 3 символи";
+            errorMessage = "Please enter at least 3 characters for search.";
             return;
         }
         else
@@ -244,6 +281,30 @@ else
         }
     }
 
+    // Adding book to purchased books
+    private async Task AddToLibrary(Book book)
+    {
+        if (string.IsNullOrEmpty(userId) || book == null)
+            return;
+
+        var alreadyOwned = await DbContext.PurchasedBooks
+            .AnyAsync(pb => pb.UserId == userId && pb.BookId == book.Id);
+
+        if (!alreadyOwned)
+        {
+            var purchasedBook = new PurchasedBook
+                {
+                    UserId = userId,
+                    BookId = book.Id,
+                };
+
+            DbContext.PurchasedBooks.Add(purchasedBook);
+            await DbContext.SaveChangesAsync();
+            purchasedBooks.Add(book);
+        }
+    }
+
+    // Load all books from the database
     private async Task LoadBooks()
     {
         try
@@ -258,6 +319,7 @@ else
         }
     }
 
+    // Ask ChatGPT for book recommendations
     private async Task GetRecommendation()
     {
         if (string.IsNullOrEmpty(UserQuery)) return;
@@ -284,6 +346,7 @@ else
         StateHasChanged();
     }
 
+    // Pagination handlers
     private void PreviousPage()
     {
         if (CurrentPage > 1)
@@ -300,6 +363,7 @@ else
         }
     }
 
+    // Add a book to user's cart
     private async Task AddToCart(Book book)
     {
         var authState = await AuthStateProvider.GetAuthenticationStateAsync();
@@ -337,22 +401,28 @@ else
         }
         else
         {
-            errorMessage = "Ти шо єблан! Нахуя тобі 2 копії тієї самої книжки, єбанат!";
+            errorMessage = "You already have this book in your cart.";
         }
 
         await DbContext.SaveChangesAsync();
     }
 
+    // Navigate to the Purchased Books page
     private void NavigateToPurchasedBooks()
     {
         NavigationManager.NavigateTo("/PurchasedBooks");
     }
 
+    // Construct image URL from S3 base URL
     private string GetImageUrl(string imagePath)
     {
-        const string s3BaseUrl = "https://bookstore-media228.s3.eu-north-1.amazonaws.com/";
-        return $"{s3BaseUrl}{imagePath.TrimStart('/')}";
+        var version = Guid.NewGuid().ToString();
+        return $"https://bookstore-media228.s3.eu-north-1.amazonaws.com{imagePath}?v={version}";
     }
 
-
+    private void ClearError()
+    {
+        errorMessage = string.Empty;
+    }
 }
+
