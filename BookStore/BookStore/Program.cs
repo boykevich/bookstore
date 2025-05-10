@@ -7,69 +7,86 @@ using BookStore.Components.Account;
 using BookStore.Data;
 using Stripe;
 using Amazon.S3;
-using Microsoft.Extensions.Configuration;
 
-AppContext.SetSwitch("Npgsql.EnableLegacyTimestampBehavior", true);
+AppContext.SetSwitch("Npgsql.EnableLegacyTimestampBehavior", true); // Ensures compatibility with legacy PostgreSQL timestamp behavior
 var builder = WebApplication.CreateBuilder(args);
 
-// Add services to the container.
+// ---------------------
+// Configure Services
+// ---------------------
+
+// Add Razor components and server-side Blazor support
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
 
+// Add support for MVC/Web API controllers
 builder.Services.AddControllers();
+
+// Enable cascading auth state and identity components
 builder.Services.AddCascadingAuthenticationState();
 builder.Services.AddScoped<IdentityUserAccessor>();
 builder.Services.AddScoped<IdentityRedirectManager>();
 builder.Services.AddScoped<AuthenticationStateProvider, IdentityRevalidatingAuthenticationStateProvider>();
+
+// Bind configuration for Stripe and OpenAI
 builder.Services.Configure<StripeSettings>(builder.Configuration.GetSection("Stripe"));
 builder.Services.Configure<OpenAIOptions>(builder.Configuration.GetSection("OpenAI"));
+
+// Add AWS S3 support
 builder.Services.AddDefaultAWSOptions(builder.Configuration.GetAWSOptions());
 builder.Services.AddAWSService<IAmazonS3>();
 
+// Configure Identity authentication
 builder.Services.AddAuthentication(options =>
-    {
-        options.DefaultScheme = IdentityConstants.ApplicationScheme;
-        options.DefaultSignInScheme = IdentityConstants.ExternalScheme;
-    })
-    .AddIdentityCookies();
+{
+    options.DefaultScheme = IdentityConstants.ApplicationScheme;
+    options.DefaultSignInScheme = IdentityConstants.ExternalScheme;
+})
+.AddIdentityCookies();
 
-//Database connection
+// Configure Entity Framework and PostgreSQL
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
     options.UseNpgsql(connectionString));
-// builder.Services.AddDatabaseDeveloperPageExceptionFilter();
 
+// Set Stripe API key
 StripeConfiguration.ApiKey = builder.Configuration["Stripe:SecretKey"];
 
+// Configure Identity with roles and token support
 builder.Services.AddIdentityCore<ApplicationUser>(options => options.SignIn.RequireConfirmedAccount = true)
     .AddRoles<IdentityRole>()
     .AddEntityFrameworkStores<ApplicationDbContext>()
     .AddSignInManager()
     .AddDefaultTokenProviders();
 
+// Use no-op email sender (you can replace it with your implementation)
 builder.Services.AddSingleton<IEmailSender<ApplicationUser>, IdentityNoOpEmailSender>();
-// builder.Services.AddSingleton<HarryPotterBooks>();
 
 var app = builder.Build();
 
-// Configure the HTTP request pipeline.
+// ---------------------
+// Configure Middleware
+// ---------------------
+
 if (app.Environment.IsDevelopment())
 {
-    app.UseMigrationsEndPoint();
+    app.UseMigrationsEndPoint(); // Useful for dev migrations and DB management
 }
 else
 {
     app.UseExceptionHandler("/Error", createScopeForErrors: true);
-    // The default HSTS value is 30 days. You may want to change this for production scenarios, see https://aka.ms/aspnetcore-hsts.
-    app.UseHsts();
+    app.UseHsts(); // Adds HTTP Strict Transport Security for production
 }
 
-//Define admin user
+// ---------------------
+// Ensure Roles and Default Admin User
+// ---------------------
 using (var scope = app.Services.CreateScope())
 {
     var roleManager = scope.ServiceProvider.GetRequiredService<RoleManager<IdentityRole>>();
     var userManager = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
 
+    // Create default roles
     string[] roleNames = { "Admin", "User" };
     foreach (var role in roleNames)
     {
@@ -79,12 +96,17 @@ using (var scope = app.Services.CreateScope())
         }
     }
 
-    // Optional: Create a default admin user
+    // Create default admin user if not exists
     var adminEmail = "admin@bookstore.com";
     var adminUser = await userManager.FindByEmailAsync(adminEmail);
     if (adminUser == null)
     {
-        var user = new ApplicationUser { UserName = adminEmail, Email = adminEmail, EmailConfirmed = true };
+        var user = new ApplicationUser
+        {
+            UserName = adminEmail,
+            Email = adminEmail,
+            EmailConfirmed = true
+        };
         var result = await userManager.CreateAsync(user, "Admin@123");
         if (result.Succeeded)
         {
@@ -93,24 +115,32 @@ using (var scope = app.Services.CreateScope())
     }
 }
 
+// ---------------------
+// Apply Pending Migrations
+// ---------------------
 using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-    db.Database.Migrate();        // creates DB if needed, applies all migrations
+    db.Database.Migrate(); // Applies migrations or creates DB if not exists
 }
 
+// ---------------------
+// HTTP Pipeline Configuration
+// ---------------------
 
 app.UseHttpsRedirection();
+app.UseStaticFiles();     // Serves static files like CSS, JS, images
+app.UseAntiforgery();     // CSRF protection
 
-app.UseStaticFiles();
-app.UseAntiforgery();
-
+// Maps Razor components and enables interactive server rendering
 app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode();
 
-// Add additional endpoints required by the Identity /Account Razor components.
+// Identity endpoints (login, register, etc.)
 app.MapAdditionalIdentityEndpoints();
 
+// Maps API controllers (e.g., for REST endpoints)
 app.MapControllers();
 
+// Starts the application
 app.Run();

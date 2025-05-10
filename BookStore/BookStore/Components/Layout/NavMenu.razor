@@ -1,5 +1,4 @@
 ﻿@implements IDisposable
-
 @inject NavigationManager NavigationManager
 
 <div class="top-row ps-3 navbar navbar-dark">
@@ -12,66 +11,76 @@
 
 <div class="nav-scrollable" onclick="document.querySelector('.navbar-toggler').click()">
     <nav class="flex-column">
+
+        <!-- Home -->
         <div class="nav-item px-3">
-            <NavLink class="nav-link" href="" Match="NavLinkMatch.All">
-                <span class="bi bi-house-door-fill-nav-menu" aria-hidden="true"></span> Home
+            <NavLink class="nav-link d-flex align-items-center gap-2" href="" Match="NavLinkMatch.All">
+                <i class="bi bi-house-door-fill" style="font-size: 1.2rem; position: relative; top: -14px;"></i>
+                <span>Home</span>
             </NavLink>
         </div>
-        
-        @* Link to admin page *@
+
+        <!-- Admin -->
         <AuthorizeView Roles="Admin">
-            <li class="nav-item px-3">
-                <NavLink class="nav-link" href="/admin">
-                    <span class="oi oi-lock-locked" aria-hidden="true"></span> Admin
+            <div class="nav-item px-3">
+                <NavLink class="nav-link d-flex align-items-center gap-2" href="/admin">
+                    <i class="bi bi-shield-lock-fill" style="font-size: 1.2rem; position: relative; top: -14px;"></i>
+                    <span>Admin</span>
                 </NavLink>
-            </li>
+            </div>
         </AuthorizeView>
 
-
-        <!-- Додаємо посилання на кошик, доступне лише авторизованим користувачам -->
+        <!-- Cart -->
         <AuthorizeView>
             <Authorized>
                 <div class="nav-item px-3">
-                    <NavLink class="nav-link d-flex align-items-center gap-10" href="cartpage">
-                        <i class="bi bi-cart-fill" style="font-size: 1.2rem;" aria-hidden="true"></i>
+                    <NavLink class="nav-link d-flex align-items-center gap-2" href="cartpage">
+                        <i class="bi bi-cart-fill" style="font-size: 1.2rem; position: relative; top: -14px;"></i>
                         <span>Cart</span>
                     </NavLink>
                 </div>
             </Authorized>
         </AuthorizeView>
 
+        <!-- Purchased Books -->
         <AuthorizeView>
             <Authorized>
                 <div class="nav-item px-3">
-                    <NavLink class="nav-link d-flex align-items-center gap-10" href="PurchasedBooks">
-                        <i class="bi bi-book" style="font-size: 1.2rem;" aria-hidden="true"></i>
+                    <NavLink class="nav-link d-flex align-items-center gap-2" href="PurchasedBooks">
+                        <i class="bi bi-book-fill" style="font-size: 1.2rem; position: relative; top: -14px;"></i>
                         <span>Purchased Books</span>
                     </NavLink>
                 </div>
             </Authorized>
         </AuthorizeView>
 
+        <!-- Profile & Logout -->
         <AuthorizeView>
             <Authorized>
                 <div class="nav-item px-3">
-                    <NavLink class="nav-link" href="Account/Manage">
-                        <span class="bi bi-person-fill-nav-menu" aria-hidden="true"></span> Profile
+                    <NavLink class="nav-link d-flex align-items-center gap-2" href="Account/Manage">
+                        <i class="bi bi-person-circle" style="font-size: 1.2rem; position: relative; top: -14px;"></i>
+                        <span>Profile</span>
                     </NavLink>
                 </div>
+
                 <div class="nav-item px-3">
-                    <form action="Account/Logout" method="post">
+                    <form action="Account/Logout" method="post" class="m-0 p-0">
                         <AntiforgeryToken />
                         <input type="hidden" name="ReturnUrl" value="@currentUrl" />
-                        <button type="submit" class="nav-link">
-                            <span class="bi bi-arrow-bar-left-nav-menu" aria-hidden="true"></span> Logout
-                        </button>
+                        <div class="nav-link d-flex align-items-center gap-2 px-3 py-2 w-100" style="cursor: pointer;" onclick="this.closest('form').submit()">
+                            <i class="bi bi-box-arrow-left" style="font-size: 1.2rem; position: relative; top: -14px;"></i>
+                            <span>Logout</span>
+                        </div>
                     </form>
                 </div>
             </Authorized>
+
             <NotAuthorized>
                 <div class="nav-item px-3">
-                    <NavLink class="nav-link" href="Account/Login">
-                        <span class="bi bi-person-badge-nav-menu" aria-hidden="true"></span> Login
+                    <NavLink class="nav-link d-flex align-items-center gap-2" href="Account/Login">
+                        <i class="bi bi-box-arrow-in-right" style="font-size: 1.2rem; position: relative; top: -13px;"></i>
+                        <span>Login</span>
                     </NavLink>
                 </div>
             </NotAuthorized>
