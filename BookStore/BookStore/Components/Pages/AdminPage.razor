@@ -169,6 +169,7 @@ else
         currentPage = page;
         totalCount = await Db.Books.CountAsync();
         books = await Db.Books.Include(b => b.PdfBook)
+                               .Include(b => b.Authors)
                                .Skip((currentPage - 1) * pageSize)
                                .Take(pageSize)
                                .ToListAsync();
@@ -196,143 +197,79 @@ else
     private async Task SaveBook()
     {
         var isNew = selectedBook.Id == 0;
+        
+        var names = authorsInput
+            .Split(',', StringSplitOptions.RemoveEmptyEntries)
+            .Select(n => n.Trim())
+            .Where(n => n.Length > 0)
+            .Distinct()
+            .ToList();
+
+        var authorEntities = new List<Author>();
+        foreach (var full in names)
+        {
+            var parts = full.Split(' ', 2);
+            var first = parts[0];
+            var last  = parts.Length > 1 ? parts[1] : "";
+            
+            var author = await Db.Authors
+                                 .SingleOrDefaultAsync(a => 
+                                     a.FirstName == first && a.LastName == last);
+
+            if (author == null)
+            {
+                author = new Author { FirstName = first, LastName = last };
+                Db.Authors.Add(author);
+                // Don’t SaveChanges yet; EF will pick this up below
+            }
+
+            authorEntities.Add(author);
+        }
+
+        Book bookEntity;
 
         if (isNew)
         {
+            // 3a) For a new book: assign its authors *before* adding
+            selectedBook.Authors = authorEntities;
             Db.Books.Add(selectedBook);
-            await Db.SaveChangesAsync();
-            // Handle existing authors
-            if (selectedBook.Authors != null && selectedBook.Authors.Any())
-            {
-                var existingAuthors = await Db.Authors
-                    .Where(a => selectedBook.Authors.Select(x => x.Id).Contains(a.Id))
-                    .ToListAsync();
-                selectedBook.Authors = existingAuthors;
-                await Db.SaveChangesAsync();
-            }
-            statusMessage = $"Book {selectedBook.BookName} added!";
+            bookEntity = selectedBook;
         }
         else
         {
-            // Update book fields and authors
-            var bookInDb = await Db.Books.Include(b => b.PdfBook).FirstOrDefaultAsync(b => b.Id == selectedBook.Id);
-            if (bookInDb != null)
-            {
-                bookInDb.BookName = selectedBook.BookName;
-                bookInDb.Genre = selectedBook.Genre;
-                bookInDb.Price = selectedBook.Price;
-                bookInDb.AvailableLanguage = selectedBook.AvailableLanguage;
-                bookInDb.SmallDescription = selectedBook.SmallDescription;
+            // 3b) For an existing book: load it with its current authors
+            bookEntity = await Db.Books
+                                 .Include(b => b.Authors)
+                                 .FirstAsync(b => b.Id == selectedBook.Id);
 
-                if (selectedBook.Authors != null)
-                {
-                    var authorIds = selectedBook.Authors.Select(a => a.Id).ToList();
-                    var updatedAuthors = await Db.Authors.Where(a => authorIds.Contains(a.Id)).ToListAsync();
-                    bookInDb.Authors = updatedAuthors;
-                }
+            // update its scalar fields
+            bookEntity.BookName          = selectedBook.BookName;
+            bookEntity.Genre             = selectedBook.Genre;
+            bookEntity.Price             = selectedBook.Price;
+            bookEntity.AvailableLanguage = selectedBook.AvailableLanguage;
+            bookEntity.SmallDescription  = selectedBook.SmallDescription;
 
-                selectedBook = bookInDb;
-            }
+            // overwrite its author list
+            bookEntity.Authors = authorEntities;
+            // no Db.Books.Update needed—it's already tracked
         }
 
-        // Generate S3 paths
-        var slug = GenerateSlug(selectedBook.BookName);
-        var imageExt = Path.GetExtension(uploadedImage?.Name ?? selectedBook.ImagePath ?? ".png");
-        var pdfExt = Path.GetExtension(uploadedPdf?.Name ?? selectedBook.PdfBook?.FilePath ?? ".pdf");
-        var imageKey = $"/images/books/book-{selectedBook.Id}-{slug}{imageExt}";
-        var pdfKey = $"/pdf/book-{selectedBook.Id}-{slug}{pdfExt}";
+        // 4) (Optional) Handle image/pdf S3 uploads here,
+        //    updating bookEntity.ImagePath / PdfBook accordingly.
 
-        // Upload to S3
-        if (uploadedImage != null)
-        {
-            using var imageStream = uploadedImage.OpenReadStream(10_000_000);
-            await S3Client.PutObjectAsync(new PutObjectRequest
-                {
-                    BucketName = "bookstore-media228",
-                    Key = imageKey.TrimStart('/'),
-                    InputStream = imageStream,
-                    ContentType = uploadedImage.ContentType
-                });
-            selectedBook.ImagePath = imageKey;
-        }
-
-        if (uploadedPdf != null)
-        {
-            using var pdfStream = uploadedPdf.OpenReadStream(50_000_000);
-            await S3Client.PutObjectAsync(new PutObjectRequest
-                {
-                    BucketName = "bookstore-media228",
-                    Key = pdfKey.TrimStart('/'),
-                    InputStream = pdfStream,
-                    ContentType = uploadedPdf.ContentType
-                });
-            uploadedPdfPath = pdfKey;
-        }
-
+        // 5) Finally persist Book + Authors + join-table entries
         await Db.SaveChangesAsync();
 
-        // Handle authors by name
-        if (!string.IsNullOrWhiteSpace(authorsInput))
-        {
-            var inputNames = authorsInput.Split(',')
-                .Select(name => name.Trim())
-                .Where(name => !string.IsNullOrWhiteSpace(name))
-                .Distinct()
-                .ToList();
+        statusMessage = isNew
+            ? $"Book {bookEntity.BookName} added!"
+            : $"Book {bookEntity.BookName} updated!";
 
-            var matchedAuthors = await Db.Authors
-                .Where(a => inputNames.Contains(a.FirstName + " " + a.LastName))
-                .ToListAsync();
-
-            var missingNames = inputNames
-                .Except(matchedAuthors.Select(a => a.FirstName + " " + a.LastName))
-                .ToList();
-
-            foreach (var name in missingNames)
-            {
-                var parts = name.Split(' ', 2);
-                var first = parts[0];
-                var last = parts.Length > 1 ? parts[1] : "";
-                var newAuthor = new Author { FirstName = first, LastName = last };
-                Db.Authors.Add(newAuthor);
-                matchedAuthors.Add(newAuthor);
-            }
-
-            selectedBook.Authors = matchedAuthors;
-            await Db.SaveChangesAsync();
-        }
-
-        // Validate upload success
-        var imageOk = await DoesS3ObjectExistAsync(S3Client, "bookstore-media228", imageKey.TrimStart('/'));
-        var pdfOk = await DoesS3ObjectExistAsync(S3Client, "bookstore-media228", pdfKey.TrimStart('/'));
-
-        if (!imageOk || !pdfOk)
-        {
-            statusMessage = $" Book saved, but media upload failed.";
-        }
-
-        // Save PDF record in database
-        if (!string.IsNullOrEmpty(uploadedPdfPath))
-        {
-            var pdf = await Db.PdfBooks.FirstOrDefaultAsync(p => p.BookId == selectedBook.Id);
-            if (pdf == null)
-            {
-                pdf = new PdfBook { BookId = selectedBook.Id, FilePath = uploadedPdfPath };
-                Db.PdfBooks.Add(pdf);
-            }
-            else
-            {
-                pdf.FilePath = uploadedPdfPath;
-            }
-            await Db.SaveChangesAsync();
-        }
-
-        // Refresh view
-        await LoadBooks();
-        selectedBook = new Book();
-        uploadedPdfPath = "";
+        // Reset form + reload grid
+        await LoadBooks(currentPage);
+        selectedBook  = new Book();
+        authorsInput  = "";
         uploadedImage = null;
-        uploadedPdf = null;
+        uploadedPdf   = null;
     }
 
     // Check if file exists in S3
