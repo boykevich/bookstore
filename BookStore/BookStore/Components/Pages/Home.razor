@@ -165,11 +165,25 @@ else
     </div>
 
     <!-- Pagination Navigation -->
-    <div class="pagination text-center mt-4">
-        <button class="btn btn-secondary" @onclick="PreviousPage" disabled="@(CurrentPage == 1)">Previous</button>
-        <span class="mx-2">Page @CurrentPage of @TotalPages</span>
-        <button class="btn btn-secondary" @onclick="NextPage" disabled="@(CurrentPage == TotalPages)">Next</button>
-    </div>
+    <nav>
+        <ul class="pagination justify-content-center">
+            <li class="page-item @(currentPage == 1 ? "disabled" : "")">
+                <button class="page-link" @onclick="() => LoadBooks(currentPage - 1)">Previous</button>
+            </li>
+
+            @for (int i = 1; i <= totalPages; i++)
+            {
+                var currIndex = i;
+                <li class="page-item @(currentPage == currIndex ? "active" : "")">
+                    <button class="page-link" @onclick="() => LoadBooks(currIndex)">@i</button>
+                </li>
+            }
+
+            <li class="page-item @(currentPage == totalPages ? "disabled" : "")">
+                <button class="page-link" @onclick="() => LoadBooks(currentPage + 1)">Next</button>
+            </li>
+        </ul>
+    </nav>
 }
 
 @code {
@@ -182,6 +196,9 @@ else
     }
 
     // Main state variables
+    private int currentPage = 1;
+    private int totalCount;
+    private int totalPages;
     private List<Book>? books;
     private string SearchQuery = "";
     private string errorMessage = "";
@@ -305,18 +322,15 @@ else
     }
 
     // Load all books from the database
-    private async Task LoadBooks()
+    private async Task LoadBooks(int page = 1)
     {
-        try
-        {
-            books = await DbContext.Books.Include(b => b.Authors).ToListAsync();
-            TotalPages = (int)Math.Ceiling((double)(books?.Count ?? 0) / PageSize);
-        }
-        catch (Exception ex)
-        {
-            errorMessage = "Failed to load books. Please try again later.";
-            Console.WriteLine($"Error loading books: {ex.Message}");
-        }
+        currentPage = page;
+        totalCount = await DbContext.Books.CountAsync();
+        books = await DbContext.Books.Include(b => b.PdfBook)
+            .Skip((currentPage - 1) * PageSize)
+            .Take(PageSize)
+            .ToListAsync();
+        totalPages = (int)Math.Ceiling((double)totalCount / PageSize);
     }
 
     // Ask ChatGPT for book recommendations
